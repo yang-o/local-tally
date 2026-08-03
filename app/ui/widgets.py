@@ -256,6 +256,9 @@ class DataTable(ctk.CTkFrame):
     ROW_BG_ALT = "#f8fafc"
     SELECT_BG = "#dbeafe"
     SCROLL_GUTTER = 16
+    CELL_FONT = ("PingFang SC", 12)
+    HEADER_FONT = ("PingFang SC", 12, "bold")
+    EMPTY_FONT = ("PingFang SC", 12)
 
     def __init__(
         self,
@@ -263,7 +266,7 @@ class DataTable(ctk.CTkFrame):
         columns: Sequence[tuple[str, str, int]],
         on_select: Optional[Callable[[], None]] = None,
         column_anchors: Optional[dict[str, str]] = None,
-        rowheight: int = 34,
+        rowheight: int = 30,
         style_prefix: str = "Tally",
         page_size: int = 20,
         enable_pagination: bool = True,
@@ -403,11 +406,11 @@ class DataTable(ctk.CTkFrame):
                 text=heading,
                 bg=self.HEADER_BG,
                 fg="#0f172a",
-                font=("PingFang SC", 13, "bold"),
+                font=self.HEADER_FONT,
                 anchor="center",
                 justify="center",
             )
-            label.pack(fill="both", expand=True, padx=8, pady=6)
+            label.pack(fill="both", expand=True, padx=6, pady=5)
             self._header_cells.append(cell)
 
     def _apply_column_minsizes(self) -> None:
@@ -522,17 +525,34 @@ class DataTable(ctk.CTkFrame):
                     max_lines = max(max_lines, cell.count("\n") + 1)
         if max_lines <= 1:
             return self._base_rowheight
-        return max(self._base_rowheight, 22 * max_lines + 12)
+        return max(self._base_rowheight, 18 * max_lines + 10)
 
     def _font_from_style(self, style: dict[str, object]) -> tuple:
         font_spec = style.get("font")
         if isinstance(font_spec, tuple) and font_spec:
-            family = str(font_spec[0]) if font_spec[0] else "PingFang SC"
-            size = int(font_spec[1]) if len(font_spec) > 1 else 13
+            family = str(font_spec[0]) if font_spec[0] else self.CELL_FONT[0]
+            size = int(font_spec[1]) if len(font_spec) > 1 else self.CELL_FONT[1]
+            # 标签字体也不超过默认列表字号太多，避免撑列
+            size = min(size, self.CELL_FONT[1] + 1)
             if len(font_spec) > 2 and font_spec[2] == "bold":
                 return (family, size, "bold")
             return (family, size)
-        return ("PingFang SC", 13)
+        return self.CELL_FONT
+
+    def _ellipsize(self, text: str, col_idx: int) -> str:
+        """按列宽裁剪单行文本，尽量不超出默认列宽。"""
+        if not text or "\n" in text:
+            return text
+        minsize = (
+            self._col_minsizes[col_idx]
+            if col_idx < len(self._col_minsizes)
+            else 80
+        )
+        # 字号 12 时中文约 12px/字，扣除左右 padding
+        max_chars = max(4, (minsize - 12) // 12)
+        if len(text) <= max_chars:
+            return text
+        return text[: max(1, max_chars - 1)] + "…"
 
     def clear(self) -> None:
         for child in self.body.winfo_children():
@@ -618,7 +638,7 @@ class DataTable(ctk.CTkFrame):
             anchor=self._to_anchor(anchor),
             justify=self._to_justify(anchor),
         )
-        label.pack(fill="both", expand=True, padx=8, pady=4)
+        label.pack(fill="both", expand=True, padx=6, pady=3)
         return cell
 
     def _render_page(self) -> None:

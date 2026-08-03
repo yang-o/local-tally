@@ -112,7 +112,7 @@ class RoomsPage(ctk.CTkFrame):
                 "area": "e",
                 "status": "center",
             },
-            rowheight=34,
+            rowheight=30,
             style_prefix="TallyRoom",
         )
         self.table.grid(row=1, column=0, sticky="nsew")
@@ -124,25 +124,25 @@ class RoomsPage(ctk.CTkFrame):
             "vacant",
             foreground="#6b7280",
             background="#f3f4f6",
-            font=("PingFang SC", 13, "bold"),
+            font=("PingFang SC", 12, "bold"),
         )
         tree.tag_configure(
             "rented",
             foreground="#047857",
             background="#ecfdf5",
-            font=("PingFang SC", 13, "bold"),
+            font=("PingFang SC", 12, "bold"),
         )
         tree.tag_configure(
             "expiring",
             foreground="#c2410c",
             background="#fff7ed",
-            font=("PingFang SC", 13, "bold"),
+            font=("PingFang SC", 12, "bold"),
         )
         tree.tag_configure(
             "expired",
             foreground="#b91c1c",
             background="#fef2f2",
-            font=("PingFang SC", 13, "bold"),
+            font=("PingFang SC", 12, "bold"),
         )
 
     def set_project_filter(self, project_id: int | None) -> None:

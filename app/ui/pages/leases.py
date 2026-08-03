@@ -200,7 +200,7 @@ class LeasesPage(ctk.CTkFrame):
                 "status": "center",
             },
             style_prefix="TallyLease",
-            rowheight=34,
+            rowheight=30,
         )
         self.table.grid(row=1, column=0, sticky="nsew")
 

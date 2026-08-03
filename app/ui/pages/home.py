@@ -61,7 +61,7 @@ class HomePage(ctk.CTkFrame):
                 "amount": "e",
                 "detail": "w",
             },
-            rowheight=38,
+            rowheight=32,
             style_prefix="TallyReminder",
             emphasis_columns=("days",),
         )
@@ -75,28 +75,28 @@ class HomePage(ctk.CTkFrame):
             "overdue",
             foreground="#b91c1c",
             background="#fef2f2",
-            font=("PingFang SC", 15, "bold"),
+            font=("PingFang SC", 12, "bold"),
         )
         # 今天：琥珀
         tree.tag_configure(
             "today",
             foreground="#b45309",
             background="#fffbeb",
-            font=("PingFang SC", 15, "bold"),
+            font=("PingFang SC", 12, "bold"),
         )
         # ≤3 天：橙
         tree.tag_configure(
             "urgent",
             foreground="#c2410c",
             background="#fff7ed",
-            font=("PingFang SC", 15, "bold"),
+            font=("PingFang SC", 12, "bold"),
         )
         # 提醒窗口内其余：黄（警示，非绿）
         tree.tag_configure(
             "upcoming",
             foreground="#a16207",
             background="#fefce8",
-            font=("PingFang SC", 15, "bold"),
+            font=("PingFang SC", 12, "bold"),
         )
 
     def refresh(self) -> None:
