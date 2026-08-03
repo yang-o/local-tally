@@ -8,10 +8,8 @@
 
 说明:
   PyInstaller 不支持交叉编译。macOS 只能打 .app，Windows 只能打 .exe。
-  若要一次产出双端产物：
-  - 推送到 main：GitHub Actions 自动打包，可在 Actions 产物中下载
-  - 推送标签 v*（如 v1.0.0）：打包并创建 GitHub Release
-  - 或在 Actions 页面手动运行 Build Desktop Apps
+  若要一次产出双端产物，请打标签并推送（如 v1.0.0），
+  触发 .github/workflows/build.yml 打包并发布 Release。
 """
 
 from __future__ import annotations
