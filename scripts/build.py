@@ -24,14 +24,34 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def _configure_stdio() -> None:
+    """避免 Windows CI (cp1252) 打印中文时 UnicodeEncodeError。"""
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if callable(reconfigure):
+            try:
+                reconfigure(encoding="utf-8", errors="replace")
+            except Exception:
+                pass
+
+
+def _print(message: str) -> None:
+    try:
+        print(message)
+    except UnicodeEncodeError:
+        encoding = getattr(sys.stdout, "encoding", None) or "utf-8"
+        sys.stdout.buffer.write((message + "\n").encode(encoding, errors="replace"))
+        sys.stdout.buffer.flush()
+
+
 def _run(cmd: list[str]) -> None:
-    print("+", " ".join(cmd))
+    _print("+ " + " ".join(cmd))
     subprocess.check_call(cmd, cwd=ROOT)
 
 
 def build_mac() -> Path:
     if sys.platform != "darwin":
-        raise SystemExit("macOS 打包只能在 macOS 上执行")
+        raise SystemExit("macOS build requires macOS")
     _run(
         [
             sys.executable,
@@ -44,14 +64,14 @@ def build_mac() -> Path:
     )
     app_path = ROOT / "dist" / "Tally.app"
     if not app_path.exists():
-        raise SystemExit("未找到 dist/Tally.app，打包可能失败")
-    print(f"macOS 应用已生成: {app_path}")
+        raise SystemExit("dist/Tally.app not found")
+    _print(f"macOS app built: {app_path}")
     return app_path
 
 
 def build_win() -> Path:
     if sys.platform != "win32":
-        raise SystemExit("Windows 打包只能在 Windows 上执行")
+        raise SystemExit("Windows build requires Windows")
     _run(
         [
             sys.executable,
@@ -65,19 +85,20 @@ def build_win() -> Path:
     exe_dir = ROOT / "dist" / "Tally"
     exe_path = exe_dir / "Tally.exe"
     if not exe_path.exists():
-        raise SystemExit("未找到 dist/Tally/Tally.exe，打包可能失败")
-    print(f"Windows 应用已生成: {exe_path}")
+        raise SystemExit("dist/Tally/Tally.exe not found")
+    _print(f"Windows app built: {exe_path}")
     return exe_path
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="打包 Tally 桌面应用")
+    _configure_stdio()
+    parser = argparse.ArgumentParser(description="Build Tally desktop app")
     parser.add_argument(
         "target",
         nargs="?",
         choices=["auto", "mac", "win"],
         default="auto",
-        help="打包目标（默认按当前系统）",
+        help="build target (default: current OS)",
     )
     args = parser.parse_args()
 
@@ -89,13 +110,12 @@ def main() -> None:
         elif system == "windows":
             target = "win"
         else:
-            raise SystemExit(f"当前系统 {platform.system()} 暂不支持桌面打包")
+            raise SystemExit(f"unsupported OS: {platform.system()}")
 
-    # 确保依赖可用
     try:
         import PyInstaller  # noqa: F401
     except ImportError:
-        print("正在安装打包依赖...")
+        _print("Installing build dependencies...")
         _run(
             [
                 sys.executable,
