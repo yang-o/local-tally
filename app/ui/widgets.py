@@ -80,8 +80,9 @@ class DatePickerField(ctk.CTkFrame):
         popup.lift()
         popup.focus_force()
 
-        cal = Calendar(
-            popup,
+        # 优先中文 locale；不可用时回退，避免打包环境缺语言包导致弹窗失败
+        cal_kwargs = dict(
+            master=popup,
             selectmode="day",
             year=current.year,
             month=current.month,
@@ -89,6 +90,15 @@ class DatePickerField(ctk.CTkFrame):
             date_pattern="yyyy-mm-dd",
             showweeknumbers=False,
         )
+        cal = None
+        for locale_name in ("zh_CN", "zh_Hans_CN", "zh"):
+            try:
+                cal = Calendar(locale=locale_name, **cal_kwargs)
+                break
+            except Exception:
+                cal = None
+        if cal is None:
+            cal = Calendar(**cal_kwargs)
         cal.pack(fill="both", expand=True, padx=12, pady=(12, 8))
 
         def confirm() -> None:
