@@ -65,20 +65,22 @@ jobs:
       - name: Verify Windows output
         shell: pwsh
         run: |
-          if (-not (Test-Path "dist/Tally.exe")) {
+          if (-not (Test-Path "dist/Tally/Tally.exe")) {
             Write-Host "dist contents:"
             Get-ChildItem -Recurse dist -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName }
             throw "Tally.exe not found"
+          }
+          if (-not (Test-Path "dist/Tally/_internal")) {
+            throw "_internal folder not found next to Tally.exe"
           }
 
       - name: Zip Windows app
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path dist/Tally-Windows | Out-Null
-          Copy-Item dist/Tally.exe dist/Tally-Windows/Tally.exe
-          Copy-Item bundle_support/WINDOWS_README.txt dist/Tally-Windows/使用说明.txt
+          Copy-Item bundle_support/WINDOWS_README.txt dist/Tally/使用说明.txt -Force
           if (Test-Path "dist/Tally-Windows.zip") { Remove-Item "dist/Tally-Windows.zip" -Force }
-          tar -a -c -f dist/Tally-Windows.zip -C dist/Tally-Windows .
+          # 保留 Tally/ 目录层，避免解压后只剩散落文件被误拷贝
+          tar -a -c -f dist/Tally-Windows.zip -C dist Tally
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v6

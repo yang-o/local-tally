@@ -82,9 +82,9 @@ def build_win() -> Path:
             str(ROOT / "build_windows.spec"),
         ]
     )
-    exe_path = ROOT / "dist" / "Tally.exe"
+    exe_path = ROOT / "dist" / "Tally" / "Tally.exe"
     if not exe_path.exists():
-        raise SystemExit("dist/Tally.exe not found")
+        raise SystemExit("dist/Tally/Tally.exe not found")
     _print(f"Windows app built: {exe_path}")
     return exe_path
 
