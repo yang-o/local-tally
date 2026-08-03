@@ -11,7 +11,6 @@ PRAGMA foreign_keys = ON;
 CREATE TABLE IF NOT EXISTS projects (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
-    address TEXT NOT NULL DEFAULT '',
     remind_days INTEGER NOT NULL DEFAULT 7,
     created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
 );
@@ -95,6 +94,31 @@ class Database:
             conn.executescript(SCHEMA_SQL)
             self._seed_settings(conn)
             self._migrate_free_periods(conn)
+            self._migrate_drop_project_address(conn)
+
+    def _migrate_drop_project_address(self, conn: sqlite3.Connection) -> None:
+        """移除已废弃的 projects.address 列。"""
+        cols = {
+            row[1] for row in conn.execute("PRAGMA table_info(projects)").fetchall()
+        }
+        if "address" not in cols:
+            return
+        conn.execute("PRAGMA foreign_keys = OFF")
+        conn.executescript(
+            """
+            CREATE TABLE projects_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                remind_days INTEGER NOT NULL DEFAULT 7,
+                created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+            );
+            INSERT INTO projects_new (id, name, remind_days, created_at)
+            SELECT id, name, remind_days, created_at FROM projects;
+            DROP TABLE projects;
+            ALTER TABLE projects_new RENAME TO projects;
+            """
+        )
+        conn.execute("PRAGMA foreign_keys = ON")
 
     def _migrate_free_periods(self, conn: sqlite3.Connection) -> None:
         """将旧版单段免租期迁移到 lease_free_periods。"""

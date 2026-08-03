@@ -82,8 +82,8 @@ class ProjectRepository:
     def create(self, name: str) -> int:
         with self.db.connect() as conn:
             cur = conn.execute(
-                "INSERT INTO projects (name, address) VALUES (?, ?)",
-                (name, ""),
+                "INSERT INTO projects (name) VALUES (?)",
+                (name,),
             )
             return int(cur.lastrowid)
 
