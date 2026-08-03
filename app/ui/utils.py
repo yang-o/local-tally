@@ -7,6 +7,29 @@ from tkinter import filedialog, messagebox
 from typing import Optional
 
 
+def center_window(
+    window,
+    width: int | None = None,
+    height: int | None = None,
+) -> None:
+    """将窗口置于当前屏幕中央。"""
+    try:
+        window.update_idletasks()
+        w = width if width and width > 1 else window.winfo_width()
+        h = height if height and height > 1 else window.winfo_height()
+        if w <= 1:
+            w = window.winfo_reqwidth()
+        if h <= 1:
+            h = window.winfo_reqheight()
+        screen_w = window.winfo_screenwidth()
+        screen_h = window.winfo_screenheight()
+        x = max(0, (screen_w - w) // 2)
+        y = max(0, (screen_h - h) // 2)
+        window.geometry(f"{w}x{h}+{x}+{y}")
+    except Exception:
+        pass
+
+
 def parse_date(text: str, field_name: str = "日期") -> date:
     text = text.strip()
     if not text:

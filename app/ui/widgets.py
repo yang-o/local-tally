@@ -8,6 +8,8 @@ from typing import Callable, Optional, Sequence, Union
 import customtkinter as ctk
 from tkcalendar import Calendar
 
+from app.ui.utils import center_window
+
 
 class DatePickerField(ctk.CTkFrame):
     """日期输入框：可手动输入，也可弹出日历选择。"""
@@ -68,10 +70,15 @@ class DatePickerField(ctk.CTkFrame):
         current = self._parse_current()
         popup = ctk.CTkToplevel(self)
         popup.title("选择日期")
-        popup.geometry("320x340")
         popup.resizable(False, False)
         popup.transient(self.winfo_toplevel())
+        popup.withdraw()
+        popup.geometry("320x340")
+        center_window(popup, 320, 340)
+        popup.deiconify()
         popup.grab_set()
+        popup.lift()
+        popup.focus_force()
 
         cal = Calendar(
             popup,
@@ -716,10 +723,14 @@ class FormDialog(ctk.CTkToplevel):
     def __init__(self, master: tk.Misc, title: str, width: int = 460, height: int = 420) -> None:
         super().__init__(master)
         self.title(title)
-        self.geometry(f"{width}x{height}")
         self.resizable(False, False)
         self.transient(master)
+        self.withdraw()
+        self.geometry(f"{width}x{height}")
+        center_window(self, width, height)
+        self.deiconify()
         self.grab_set()
+        self.lift()
         self.result: Optional[dict] = None
 
         self.grid_columnconfigure(0, weight=1)
@@ -738,6 +749,7 @@ class FormDialog(ctk.CTkToplevel):
         self.ok_btn.grid(row=0, column=2)
 
         self.after(50, self._focus)
+        self.after(80, lambda: center_window(self, width, height))
 
     def _focus(self) -> None:
         try:
