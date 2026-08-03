@@ -12,8 +12,8 @@ concurrency:
 
 jobs:
   build-macos:
-    # Intel runner：生成 x86_64，Intel Mac 可原生运行，Apple Silicon 可走 Rosetta
-    runs-on: macos-13
+    # Intel runner：生成 x86_64（macos-13 已退役，改用 macos-15-intel）
+    runs-on: macos-15-intel
     steps:
       - uses: actions/checkout@v5
 
