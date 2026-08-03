@@ -24,10 +24,11 @@ class SettingsPage(ctk.CTkFrame):
         self.on_storage_configured = on_storage_configured
         self.on_app_name_changed = on_app_name_changed
         self.on_uninstall = on_uninstall
+        self.grid_rowconfigure(1, weight=1)
         self.grid_columnconfigure(0, weight=1)
 
         header = ctk.CTkFrame(self, fg_color="transparent")
-        header.grid(row=0, column=0, sticky="ew", pady=(0, 16))
+        header.grid(row=0, column=0, sticky="ew", pady=(0, 12))
         ctk.CTkLabel(
             header, text="通用配置", font=ctk.CTkFont(size=22, weight="bold")
         ).pack(anchor="w")
@@ -39,8 +40,13 @@ class SettingsPage(ctk.CTkFrame):
         )
         self.subtitle.pack(anchor="w", pady=(4, 0))
 
-        card = ctk.CTkFrame(self)
-        card.grid(row=1, column=0, sticky="ew")
+        # 可滚动区域，避免默认窗口高度下底部按钮被遮挡
+        self.scroll = ctk.CTkScrollableFrame(self, fg_color="transparent")
+        self.scroll.grid(row=1, column=0, sticky="nsew")
+        self.scroll.grid_columnconfigure(0, weight=1)
+
+        card = ctk.CTkFrame(self.scroll)
+        card.grid(row=0, column=0, sticky="ew")
         card.grid_columnconfigure(1, weight=1)
 
         row = 0
@@ -127,20 +133,20 @@ class SettingsPage(ctk.CTkFrame):
 
         row = 9
         actions = ctk.CTkFrame(card, fg_color="transparent")
-        actions.grid(row=row, column=0, columnspan=3, sticky="e", padx=20, pady=(8, 20))
+        actions.grid(row=row, column=0, columnspan=3, sticky="ew", padx=20, pady=(8, 20))
         ctk.CTkButton(actions, text="保存配置", width=110, command=self.save).pack(
             side="right"
         )
 
-        # 打包版卸载区
-        self.uninstall_card = ctk.CTkFrame(self)
-        self.uninstall_card.grid(row=2, column=0, sticky="ew", pady=(16, 0))
+        # 打包版卸载区（放在滚动区域内，保证可完整看到）
+        self.uninstall_card = ctk.CTkFrame(self.scroll)
+        self.uninstall_card.grid(row=1, column=0, sticky="ew", pady=(16, 12))
         self.uninstall_card.grid_columnconfigure(0, weight=1)
         ctk.CTkLabel(
             self.uninstall_card,
             text="卸载",
             font=ctk.CTkFont(size=16, weight="bold"),
-        ).grid(row=0, column=0, sticky="w", padx=20, pady=(20, 8))
+        ).grid(row=0, column=0, sticky="w", padx=20, pady=(16, 8))
         ctk.CTkLabel(
             self.uninstall_card,
             text="卸载将删除程序目录、本地数据与配置，且不可恢复",
@@ -155,7 +161,7 @@ class SettingsPage(ctk.CTkFrame):
             fg_color="#b91c1c",
             hover_color="#991b1b",
             command=self.uninstall,
-        ).grid(row=2, column=0, sticky="e", padx=20, pady=(0, 20))
+        ).grid(row=2, column=0, sticky="e", padx=20, pady=(0, 16))
 
         if not is_frozen():
             self.uninstall_card.grid_remove()
