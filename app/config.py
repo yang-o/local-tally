@@ -51,15 +51,30 @@ def get_app_bundle_path() -> Path | None:
     return None
 
 
-def get_portable_data_dir() -> Path:
-    """打包版固定数据目录：程序目录下的 data。"""
+def get_frozen_data_dir() -> Path:
+    """打包版固定数据目录。
+
+    - Windows：程序目录下的 data
+    - macOS：~/Library/Application Support/Tally/data
+    """
+    if sys.platform == "darwin":
+        return get_platform_app_support_dir() / BOOTSTRAP_APP_DIR / "data"
     return get_install_dir() / "data"
 
 
+def get_portable_data_dir() -> Path:
+    """兼容旧名，等同 get_frozen_data_dir。"""
+    return get_frozen_data_dir()
+
+
 def get_bootstrap_dir() -> Path:
-    """引导配置目录。打包版放入 data；开发版使用系统 Application Support。"""
-    if is_frozen():
-        path = get_portable_data_dir()
+    """引导配置目录。
+
+    - Windows 打包版：程序目录/data
+    - macOS 打包版与开发版：~/Library/Application Support/Tally
+    """
+    if is_frozen() and sys.platform == "win32":
+        path = get_frozen_data_dir()
     else:
         path = get_platform_app_support_dir() / BOOTSTRAP_APP_DIR
     path.mkdir(parents=True, exist_ok=True)
@@ -71,5 +86,18 @@ def get_bootstrap_path() -> Path:
 
 
 def get_legacy_data_dir() -> Path:
-    """旧版默认数据目录，用于迁移检测。"""
+    """系统 Application Support 下的 Tally 目录（含引导配置）。"""
     return get_platform_app_support_dir() / BOOTSTRAP_APP_DIR
+
+
+def frozen_storage_hint() -> str:
+    """打包版数据路径说明文案。"""
+    if sys.platform == "darwin":
+        return "打包版固定使用 ~/Library/Application Support/Tally/data，不可修改"
+    return "打包版固定使用程序目录下的 data 文件夹，不可修改"
+
+
+def frozen_storage_error() -> str:
+    if sys.platform == "darwin":
+        return "打包版数据存储位置固定为 ~/Library/Application Support/Tally/data，不可修改"
+    return "打包版数据存储位置固定为程序目录下的 data，不可修改"

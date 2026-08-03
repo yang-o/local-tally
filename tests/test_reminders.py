@@ -105,10 +105,22 @@ class BootstrapConfigTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 cfg.set_data_storage_path(root / "other")
 
-    def test_portable_data_dir_next_to_install(self) -> None:
-        from app.config import get_install_dir, get_portable_data_dir
+    def test_frozen_data_dir_platform_default(self) -> None:
+        import sys
 
-        self.assertEqual(get_portable_data_dir(), get_install_dir() / "data")
+        from app.config import (
+            get_frozen_data_dir,
+            get_install_dir,
+            get_platform_app_support_dir,
+        )
+
+        if sys.platform == "darwin":
+            self.assertEqual(
+                get_frozen_data_dir(),
+                get_platform_app_support_dir() / "Tally" / "data",
+            )
+        else:
+            self.assertEqual(get_frozen_data_dir(), get_install_dir() / "data")
 
 
 if __name__ == "__main__":

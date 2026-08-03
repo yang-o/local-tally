@@ -1,15 +1,18 @@
 from __future__ import annotations
 
 import json
+import shutil
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Optional
 
 from app.config import (
     DEFAULT_APP_NAME,
+    frozen_storage_error,
     get_bootstrap_path,
+    get_frozen_data_dir,
+    get_install_dir,
     get_legacy_data_dir,
-    get_portable_data_dir,
     is_frozen,
 )
 
@@ -28,7 +31,7 @@ class BootstrapConfig:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._data = self._load()
         if is_frozen() and path is None:
-            self._ensure_portable_storage()
+            self._ensure_frozen_storage()
         else:
             self._maybe_migrate_legacy()
 
@@ -52,10 +55,33 @@ class BootstrapConfig:
             encoding="utf-8",
         )
 
-    def _ensure_portable_storage(self) -> None:
-        """打包版固定使用程序目录下 data，且不可变更。"""
-        data_dir = get_portable_data_dir()
+    def _maybe_migrate_macos_sibling_data(self, target: Path) -> None:
+        """若旧版曾把数据放在 .app 同级 data，迁移到 Application Support。"""
+        import sys
+
+        if sys.platform != "darwin":
+            return
+        if (target / "tally.db").exists():
+            return
+        old = get_install_dir() / "data"
+        old_db = old / "tally.db"
+        if not old_db.exists():
+            return
+        target.mkdir(parents=True, exist_ok=True)
+        for item in old.iterdir():
+            dest = target / item.name
+            if dest.exists():
+                continue
+            if item.is_dir():
+                shutil.copytree(item, dest)
+            else:
+                shutil.copy2(item, dest)
+
+    def _ensure_frozen_storage(self) -> None:
+        """打包版固定数据目录，且不可变更。"""
+        data_dir = get_frozen_data_dir()
         data_dir.mkdir(parents=True, exist_ok=True)
+        self._maybe_migrate_macos_sibling_data(data_dir)
         resolved = str(data_dir.resolve())
         if self._data.data_storage_path != resolved:
             self._data.data_storage_path = resolved
@@ -74,11 +100,17 @@ class BootstrapConfig:
         if legacy_db.exists():
             self._data.data_storage_path = str(legacy_db.parent.resolve())
             self._save()
+            return
+        # 开发态也可直接沿用 Application Support/Tally/data
+        support_data = get_legacy_data_dir() / "data" / "tally.db"
+        if support_data.exists():
+            self._data.data_storage_path = str(support_data.parent.resolve())
+            self._save()
 
     def reload(self) -> None:
         self._data = self._load()
         if is_frozen() and self.path.resolve() == get_bootstrap_path().resolve():
-            self._ensure_portable_storage()
+            self._ensure_frozen_storage()
 
     @property
     def app_name(self) -> str:
@@ -96,6 +128,7 @@ class BootstrapConfig:
         return bool(path)
 
     def is_portable(self) -> bool:
+        """打包版（路径固定锁定）。"""
         return is_frozen()
 
     def get_data_storage_path(self) -> Optional[Path]:
@@ -111,14 +144,13 @@ class BootstrapConfig:
 
     def set_data_storage_path(self, path: str | Path) -> Path:
         if is_frozen():
-            raise ValueError("打包版数据存储位置固定为程序目录下的 data，不可修改")
+            raise ValueError(frozen_storage_error())
         if self.is_storage_configured():
             raise ValueError("数据存储位置已配置，不可修改")
         storage = Path(path).expanduser().resolve()
         if storage.exists() and not storage.is_dir():
             raise ValueError("数据存储位置必须是文件夹")
         storage.mkdir(parents=True, exist_ok=True)
-        # 可写性检查
         probe = storage / ".tally_write_test"
         try:
             probe.write_text("ok", encoding="utf-8")

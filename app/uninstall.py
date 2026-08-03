@@ -9,17 +9,17 @@ from pathlib import Path
 
 from app.config import (
     get_app_bundle_path,
+    get_frozen_data_dir,
     get_install_dir,
     get_legacy_data_dir,
-    get_portable_data_dir,
     is_frozen,
 )
 
 
-def _cleanup_legacy_support_dir() -> None:
-    legacy = get_legacy_data_dir()
-    if legacy.exists():
-        shutil.rmtree(legacy, ignore_errors=True)
+def _cleanup_app_support_dir() -> None:
+    support = get_legacy_data_dir()
+    if support.exists():
+        shutil.rmtree(support, ignore_errors=True)
 
 
 def uninstall_portable_app() -> None:
@@ -28,7 +28,6 @@ def uninstall_portable_app() -> None:
         raise RuntimeError("仅打包版支持卸载")
 
     install_dir = get_install_dir().resolve()
-    data_dir = get_portable_data_dir().resolve()
     app_bundle = get_app_bundle_path()
     if app_bundle is not None:
         app_bundle = app_bundle.resolve()
@@ -37,21 +36,22 @@ def uninstall_portable_app() -> None:
         _uninstall_windows(install_dir)
         return
 
-    # macOS / 其他：先删数据与应用包，再清理旧引导目录
-    if data_dir.exists():
-        shutil.rmtree(data_dir, ignore_errors=True)
+    # macOS：删除 Application Support/Tally（含 data 与 bootstrap）以及 .app
+    _cleanup_app_support_dir()
     if app_bundle is not None and app_bundle.exists():
         shutil.rmtree(app_bundle, ignore_errors=True)
-    _cleanup_legacy_support_dir()
+    # 清理可能残留的旧版「.app 同级 data」
+    sibling_data = install_dir / "data"
+    if sibling_data.exists() and sibling_data.resolve() != get_frozen_data_dir().resolve():
+        shutil.rmtree(sibling_data, ignore_errors=True)
     sys.exit(0)
 
 
 def _uninstall_windows(install_dir: Path) -> None:
     """通过临时 bat 在进程退出后删除整个程序目录。"""
-    _cleanup_legacy_support_dir()
+    _cleanup_app_support_dir()
 
     bat_path = Path(tempfile.gettempdir()) / f"tally_uninstall_{os.getpid()}.bat"
-    # 延迟删除，确保当前 exe 已退出并释放文件句柄
     bat_path.write_text(
         "\r\n".join(
             [

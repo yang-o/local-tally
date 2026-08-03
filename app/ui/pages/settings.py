@@ -4,7 +4,7 @@ from typing import Callable, Optional
 
 import customtkinter as ctk
 
-from app.config import is_frozen
+from app.config import frozen_storage_hint, is_frozen
 from app.services import AppServices, ValidationError
 from app.ui.utils import ask_directory, ask_yes_no, parse_int, show_error, show_info
 
@@ -162,7 +162,7 @@ class SettingsPage(ctk.CTkFrame):
 
     def browse_storage(self) -> None:
         if is_frozen() or self.services.bootstrap.is_portable():
-            show_info("打包版数据存储位置固定为程序目录下的 data，不可修改")
+            show_info(frozen_storage_hint())
             return
         if self.services.bootstrap.is_storage_configured():
             show_info("数据存储位置已配置，不可修改")
@@ -193,9 +193,7 @@ class SettingsPage(ctk.CTkFrame):
             self.storage_entry.configure(state="disabled")
             self.browse_btn.grid_remove()
             self.storage_entry.grid_configure(columnspan=2, padx=(0, 20))
-            self.storage_hint.configure(
-                text="打包版固定使用程序目录下的 data 文件夹，不可修改"
-            )
+            self.storage_hint.configure(text=frozen_storage_hint())
             self.subtitle.configure(text="应用于全部项目的提醒与系统参数")
             self.uninstall_card.grid()
             return
