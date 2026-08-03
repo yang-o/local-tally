@@ -14,10 +14,10 @@ jobs:
   build-macos:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 
@@ -35,7 +35,7 @@ jobs:
           ditto -c -k --sequesterRsrc --keepParent Tally.app Tally-macOS.zip
 
       - name: Upload macOS artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: Tally-macOS
           path: dist/Tally-macOS.zip
@@ -44,10 +44,10 @@ jobs:
   build-windows:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 
@@ -59,13 +59,23 @@ jobs:
       - name: Build Windows app
         run: python scripts/build.py win
 
+      - name: Verify Windows output
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "dist/Tally/Tally.exe")) {
+            Write-Host "dist contents:"
+            Get-ChildItem -Recurse dist -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName }
+            throw "Tally.exe not found"
+          }
+
       - name: Zip Windows app
         shell: pwsh
         run: |
-          Compress-Archive -Path dist/Tally/* -DestinationPath dist/Tally-Windows.zip
+          if (Test-Path "dist/Tally-Windows.zip") { Remove-Item "dist/Tally-Windows.zip" -Force }
+          tar -a -c -f dist/Tally-Windows.zip -C dist/Tally .
 
       - name: Upload Windows artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: Tally-Windows
           path: dist/Tally-Windows.zip
@@ -79,7 +89,7 @@ jobs:
       contents: write
     steps:
       - name: Download artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: release-assets
 

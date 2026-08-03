@@ -7,16 +7,17 @@ from pathlib import Path
 SPECDIR = Path(SPECPATH).resolve().parent
 sys.path.insert(0, str(SPECDIR))
 
-from bundle_support.collect_datas import collect_datas
+from bundle_support.collect_datas import collect_package_resources
 
 block_cipher = None
+datas, binaries, hiddenimports = collect_package_resources()
 
 a = Analysis(
     ['main.py'],
     pathex=[str(SPECDIR)],
-    binaries=[],
-    datas=collect_datas(),
-    hiddenimports=['PIL._tkinter_finder'],
+    binaries=binaries,
+    datas=datas,
+    hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -37,7 +38,7 @@ exe = EXE(
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
+    upx=False,
     console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
@@ -51,7 +52,7 @@ coll = COLLECT(
     a.zipfiles,
     a.datas,
     strip=False,
-    upx=True,
+    upx=False,
     upx_exclude=[],
     name='Tally',
 )

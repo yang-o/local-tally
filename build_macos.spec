@@ -7,16 +7,17 @@ from pathlib import Path
 SPECDIR = Path(SPECPATH).resolve().parent
 sys.path.insert(0, str(SPECDIR))
 
-from bundle_support.collect_datas import collect_datas
+from bundle_support.collect_datas import collect_package_resources
 
 block_cipher = None
+datas, binaries, hiddenimports = collect_package_resources()
 
 a = Analysis(
     ['main.py'],
     pathex=[str(SPECDIR)],
-    binaries=[],
-    datas=collect_datas(),
-    hiddenimports=['PIL._tkinter_finder'],
+    binaries=binaries,
+    datas=datas,
+    hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
