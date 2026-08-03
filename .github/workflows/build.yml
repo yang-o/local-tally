@@ -65,7 +65,7 @@ jobs:
       - name: Verify Windows output
         shell: pwsh
         run: |
-          if (-not (Test-Path "dist/Tally/Tally.exe")) {
+          if (-not (Test-Path "dist/Tally.exe")) {
             Write-Host "dist contents:"
             Get-ChildItem -Recurse dist -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName }
             throw "Tally.exe not found"
@@ -74,8 +74,11 @@ jobs:
       - name: Zip Windows app
         shell: pwsh
         run: |
+          New-Item -ItemType Directory -Force -Path dist/Tally-Windows | Out-Null
+          Copy-Item dist/Tally.exe dist/Tally-Windows/Tally.exe
+          Copy-Item bundle_support/WINDOWS_README.txt dist/Tally-Windows/使用说明.txt
           if (Test-Path "dist/Tally-Windows.zip") { Remove-Item "dist/Tally-Windows.zip" -Force }
-          tar -a -c -f dist/Tally-Windows.zip -C dist/Tally .
+          tar -a -c -f dist/Tally-Windows.zip -C dist/Tally-Windows .
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v6
