@@ -187,10 +187,27 @@ class SettingsPage(ctk.CTkFrame):
         self.expire_entry.configure(state=state)
         self.rent_entry.configure(state=state)
 
+    def _set_storage_entry_readonly(self, readonly: bool) -> None:
+        """不可修改时置灰路径框，可修改时恢复可编辑样式。"""
+        if readonly:
+            self.storage_entry.configure(
+                state="disabled",
+                fg_color=("#e5e7eb", "#374151"),
+                text_color=("#6b7280", "#9ca3af"),
+                border_color=("#d1d5db", "#4b5563"),
+            )
+        else:
+            self.storage_entry.configure(
+                state="normal",
+                fg_color=("#f9fafb", "#343638"),
+                text_color=("#111827", "#DCE4EE"),
+                border_color=("#979DA2", "#565B5E"),
+            )
+
     def _set_storage_locked_ui(self, locked: bool) -> None:
         portable = is_frozen() or self.services.bootstrap.is_portable()
         if portable:
-            self.storage_entry.configure(state="disabled")
+            self._set_storage_entry_readonly(True)
             self.browse_btn.grid_remove()
             self.storage_entry.grid_configure(columnspan=2, padx=(0, 20))
             self.storage_hint.configure(text=frozen_storage_hint())
@@ -202,12 +219,12 @@ class SettingsPage(ctk.CTkFrame):
         self.storage_entry.grid_configure(columnspan=1, padx=(0, 8))
         self.uninstall_card.grid_remove()
         if locked:
-            self.storage_entry.configure(state="disabled")
+            self._set_storage_entry_readonly(True)
             self.browse_btn.configure(state="disabled")
             self.storage_hint.configure(text="数据存储位置已锁定，不可修改")
             self.subtitle.configure(text="应用于全部项目的提醒与系统参数")
         else:
-            self.storage_entry.configure(state="normal")
+            self._set_storage_entry_readonly(False)
             self.browse_btn.configure(state="normal")
             self.storage_hint.configure(text="选择后保存即锁定，之后不可修改")
             self.subtitle.configure(
@@ -217,6 +234,8 @@ class SettingsPage(ctk.CTkFrame):
     def refresh(self) -> None:
         settings = self.services.settings.get()
         self.app_name_var.set(settings.app_name)
+        # 先切到可写再写入路径，避免 disabled 状态下显示不更新
+        self.storage_entry.configure(state="normal")
         self.storage_var.set(settings.data_storage_path)
         self.expire_var.set(str(settings.lease_expire_remind_days))
         self.rent_var.set(str(settings.rent_due_remind_days))
