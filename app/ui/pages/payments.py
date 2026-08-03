@@ -75,6 +75,9 @@ class PaymentFormDialog(FormDialog):
         ctk.CTkButton(
             quick, text="按季度", width=70, command=lambda: self._apply_quick(3)
         ).pack(side="left", padx=6)
+        ctk.CTkButton(
+            quick, text="半年", width=70, command=lambda: self._apply_quick(6)
+        ).pack(side="left", padx=6)
         ctk.CTkButton(quick, text="按年", width=70, command=lambda: self._apply_quick(12)).pack(
             side="left", padx=6
         )
