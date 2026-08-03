@@ -64,8 +64,10 @@ app = BUNDLE(
     info_plist={
         'CFBundleName': 'Tally',
         'CFBundleDisplayName': '物业收费登记',
-        'CFBundleShortVersionString': '0.1.0',
-        'CFBundleVersion': '0.1.0',
+        'CFBundleShortVersionString': '0.1.1',
+        'CFBundleVersion': '0.1.1',
         'NSHighResolutionCapable': True,
+        'LSMinimumSystemVersion': '11.0',
+        'LSArchitecturePriority': ['x86_64'],
     },
 )

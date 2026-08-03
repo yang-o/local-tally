@@ -3,12 +3,12 @@ from __future__ import annotations
 import csv
 from datetime import date, datetime
 from pathlib import Path
-from tkinter import filedialog
 
 import customtkinter as ctk
 
 from app.services import AppServices, ValidationError
 from app.ui.utils import (
+    ask_save_filename,
     ask_yes_no,
     billing_month_count,
     format_money,
@@ -382,8 +382,9 @@ class PaymentsPage(ctk.CTkFrame):
         else:
             default_name = f"收费记录_{stamp}.csv"
 
-        path = filedialog.asksaveasfilename(
+        path = ask_save_filename(
             title="导出收费记录",
+            parent=self,
             defaultextension=".csv",
             initialfile=default_name,
             filetypes=[("CSV 文件", "*.csv"), ("所有文件", "*.*")],

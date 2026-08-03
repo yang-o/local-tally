@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-from tkinter import filedialog
 from typing import Callable, Optional
 
 import customtkinter as ctk
 
 from app.services import AppServices, ValidationError
-from app.ui.utils import parse_int, show_error, show_info
+from app.ui.utils import ask_directory, parse_int, show_error, show_info
 
 
 class SettingsPage(ctk.CTkFrame):
@@ -134,7 +133,7 @@ class SettingsPage(ctk.CTkFrame):
         if self.services.bootstrap.is_storage_configured():
             show_info("数据存储位置已配置，不可修改")
             return
-        selected = filedialog.askdirectory(title="选择数据存储文件夹")
+        selected = ask_directory(title="选择数据存储文件夹", parent=self)
         if selected:
             self.storage_var.set(selected)
 

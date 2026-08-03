@@ -12,7 +12,8 @@ concurrency:
 
 jobs:
   build-macos:
-    runs-on: macos-latest
+    # Intel runner：生成 x86_64，Intel Mac 可原生运行，Apple Silicon 可走 Rosetta
+    runs-on: macos-13
     steps:
       - uses: actions/checkout@v5
 
@@ -29,10 +30,21 @@ jobs:
       - name: Build macOS app
         run: python scripts/build.py mac
 
-      - name: Zip macOS app
+      - name: Ad-hoc sign app
         run: |
+          codesign --force --deep -s - dist/Tally.app
+          file dist/Tally.app/Contents/MacOS/Tally || true
+          lipo -archs dist/Tally.app/Contents/MacOS/Tally || true
+
+      - name: Package macOS zip
+        run: |
+          cp bundle_support/MACOS_README.txt dist/使用说明.txt
           cd dist
-          ditto -c -k --sequesterRsrc --keepParent Tally.app Tally-macOS.zip
+          rm -rf Tally-macOS
+          mkdir Tally-macOS
+          ditto Tally.app Tally-macOS/Tally.app
+          cp 使用说明.txt Tally-macOS/使用说明.txt
+          ditto -c -k --sequesterRsrc --keepParent Tally-macOS Tally-macOS.zip
 
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v6

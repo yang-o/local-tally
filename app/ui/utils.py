@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from calendar import monthrange
 from datetime import date, datetime, timedelta
-from tkinter import messagebox
+from pathlib import Path
+from tkinter import filedialog, messagebox
 from typing import Optional
 
 
@@ -53,6 +54,59 @@ def show_info(message: str) -> None:
 
 def ask_yes_no(message: str) -> bool:
     return bool(messagebox.askyesno("确认", message))
+
+
+def _dialog_parent(widget=None):
+    if widget is None:
+        return None
+    try:
+        top = widget.winfo_toplevel()
+        top.lift()
+        top.focus_force()
+        top.update_idletasks()
+        top.update()
+        return top
+    except Exception:
+        return None
+
+
+def ask_directory(title: str = "选择文件夹", parent=None, initialdir: str | None = None) -> str:
+    """弹出文件夹选择框；打包后需绑定父窗口，否则 Windows 上可能无响应。"""
+    top = _dialog_parent(parent)
+    start = initialdir or str(Path.home())
+    try:
+        selected = filedialog.askdirectory(
+            parent=top,
+            title=title,
+            mustexist=True,
+            initialdir=start,
+        )
+    except Exception as exc:
+        show_error(f"无法打开文件夹选择窗口：{exc}")
+        return ""
+    return selected or ""
+
+
+def ask_save_filename(
+    title: str = "保存文件",
+    parent=None,
+    defaultextension: str = "",
+    initialfile: str = "",
+    filetypes: Optional[list[tuple[str, str]]] = None,
+) -> str:
+    top = _dialog_parent(parent)
+    try:
+        selected = filedialog.asksaveasfilename(
+            parent=top,
+            title=title,
+            defaultextension=defaultextension,
+            initialfile=initialfile,
+            filetypes=filetypes or [("所有文件", "*.*")],
+        )
+    except Exception as exc:
+        show_error(f"无法打开保存对话框：{exc}")
+        return ""
+    return selected or ""
 
 
 def today_str() -> str:
