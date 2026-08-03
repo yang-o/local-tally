@@ -105,6 +105,11 @@ class BootstrapConfigTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 cfg.set_data_storage_path(root / "other")
 
+    def test_portable_data_dir_next_to_install(self) -> None:
+        from app.config import get_install_dir, get_portable_data_dir
+
+        self.assertEqual(get_portable_data_dir(), get_install_dir() / "data")
+
 
 if __name__ == "__main__":
     unittest.main()

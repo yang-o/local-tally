@@ -123,7 +123,10 @@ class SettingsService:
             raise ValidationError(str(exc)) from exc
 
         storage_just_set = False
-        if not self.bootstrap.is_storage_configured():
+        if self.bootstrap.is_portable():
+            # 打包版存储路径由程序固定，忽略界面传入值
+            pass
+        elif not self.bootstrap.is_storage_configured():
             path = (data_storage_path or "").strip()
             if not path:
                 raise ValidationError("请先配置数据存储位置")

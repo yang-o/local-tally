@@ -369,9 +369,8 @@ class DataTable(ctk.CTkFrame):
             child.destroy()
         self._header_cells.clear()
         col_count = len(self._columns)
-        for idx, (col_id, heading, _) in enumerate(self._columns):
+        for idx, (_col_id, heading, _) in enumerate(self._columns):
             self.header.grid_columnconfigure(idx, weight=1, minsize=self._col_minsizes[idx])
-            anchor = self._anchors.get(col_id, "w")
             # 父级背景作网格线：右侧/底部分隔 1px
             cell = tk.Frame(self.header, bg=self.HEADER_BG, bd=0, highlightthickness=0)
             cell.grid(
@@ -381,14 +380,15 @@ class DataTable(ctk.CTkFrame):
                 padx=(0, 0 if idx == col_count - 1 else 1),
                 pady=(0, 1),
             )
+            # 表头统一居中；表体仍按 column_anchors 左/中/右对齐
             label = tk.Label(
                 cell,
                 text=heading,
                 bg=self.HEADER_BG,
                 fg="#0f172a",
                 font=("PingFang SC", 13, "bold"),
-                anchor=self._to_anchor(anchor),
-                justify=self._to_justify(anchor),
+                anchor="center",
+                justify="center",
             )
             label.pack(fill="both", expand=True, padx=8, pady=6)
             self._header_cells.append(cell)

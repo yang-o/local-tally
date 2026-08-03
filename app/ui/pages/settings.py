@@ -4,8 +4,9 @@ from typing import Callable, Optional
 
 import customtkinter as ctk
 
+from app.config import is_frozen
 from app.services import AppServices, ValidationError
-from app.ui.utils import ask_directory, parse_int, show_error, show_info
+from app.ui.utils import ask_directory, ask_yes_no, parse_int, show_error, show_info
 
 
 class SettingsPage(ctk.CTkFrame):
@@ -15,12 +16,14 @@ class SettingsPage(ctk.CTkFrame):
         services: AppServices,
         on_storage_configured: Optional[Callable[[], None]] = None,
         on_app_name_changed: Optional[Callable[[str], None]] = None,
+        on_uninstall: Optional[Callable[[], None]] = None,
         **kwargs,
     ) -> None:
         super().__init__(master, fg_color="transparent", **kwargs)
         self.services = services
         self.on_storage_configured = on_storage_configured
         self.on_app_name_changed = on_app_name_changed
+        self.on_uninstall = on_uninstall
         self.grid_columnconfigure(0, weight=1)
 
         header = ctk.CTkFrame(self, fg_color="transparent")
@@ -129,7 +132,38 @@ class SettingsPage(ctk.CTkFrame):
             side="right"
         )
 
+        # 打包版卸载区
+        self.uninstall_card = ctk.CTkFrame(self)
+        self.uninstall_card.grid(row=2, column=0, sticky="ew", pady=(16, 0))
+        self.uninstall_card.grid_columnconfigure(0, weight=1)
+        ctk.CTkLabel(
+            self.uninstall_card,
+            text="卸载",
+            font=ctk.CTkFont(size=16, weight="bold"),
+        ).grid(row=0, column=0, sticky="w", padx=20, pady=(20, 8))
+        ctk.CTkLabel(
+            self.uninstall_card,
+            text="卸载将删除程序目录、本地数据与配置，且不可恢复",
+            font=ctk.CTkFont(size=12),
+            text_color="#6b7280",
+            anchor="w",
+        ).grid(row=1, column=0, sticky="w", padx=20, pady=(0, 12))
+        ctk.CTkButton(
+            self.uninstall_card,
+            text="卸载应用",
+            width=120,
+            fg_color="#b91c1c",
+            hover_color="#991b1b",
+            command=self.uninstall,
+        ).grid(row=2, column=0, sticky="e", padx=20, pady=(0, 20))
+
+        if not is_frozen():
+            self.uninstall_card.grid_remove()
+
     def browse_storage(self) -> None:
+        if is_frozen() or self.services.bootstrap.is_portable():
+            show_info("打包版数据存储位置固定为程序目录下的 data，不可修改")
+            return
         if self.services.bootstrap.is_storage_configured():
             show_info("数据存储位置已配置，不可修改")
             return
@@ -137,12 +171,38 @@ class SettingsPage(ctk.CTkFrame):
         if selected:
             self.storage_var.set(selected)
 
+    def uninstall(self) -> None:
+        if not is_frozen():
+            show_info("开发运行模式不提供卸载")
+            return
+        if not ask_yes_no("确认卸载？将删除程序文件与全部本地数据，且不可恢复。"):
+            return
+        if not ask_yes_no("再次确认：真的要卸载并清空数据吗？"):
+            return
+        if self.on_uninstall:
+            self.on_uninstall()
+
     def _set_remind_enabled(self, enabled: bool) -> None:
         state = "normal" if enabled else "disabled"
         self.expire_entry.configure(state=state)
         self.rent_entry.configure(state=state)
 
     def _set_storage_locked_ui(self, locked: bool) -> None:
+        portable = is_frozen() or self.services.bootstrap.is_portable()
+        if portable:
+            self.storage_entry.configure(state="disabled")
+            self.browse_btn.grid_remove()
+            self.storage_entry.grid_configure(columnspan=2, padx=(0, 20))
+            self.storage_hint.configure(
+                text="打包版固定使用程序目录下的 data 文件夹，不可修改"
+            )
+            self.subtitle.configure(text="应用于全部项目的提醒与系统参数")
+            self.uninstall_card.grid()
+            return
+
+        self.browse_btn.grid()
+        self.storage_entry.grid_configure(columnspan=1, padx=(0, 8))
+        self.uninstall_card.grid_remove()
         if locked:
             self.storage_entry.configure(state="disabled")
             self.browse_btn.configure(state="disabled")
@@ -170,22 +230,22 @@ class SettingsPage(ctk.CTkFrame):
             app_name = self.app_name_var.get().strip()
             storage_path = self.storage_var.get().strip()
             was_ready = self.services.is_ready
+            portable = is_frozen() or self.services.bootstrap.is_portable()
 
             expire = None
             rent = None
-            if was_ready or self.services.bootstrap.is_storage_configured():
+            if was_ready or self.services.bootstrap.is_storage_configured() or portable:
                 expire = parse_int(self.expire_var.get(), "合同到期提前提醒天数")
                 rent = parse_int(self.rent_var.get(), "按月应收提前提醒天数")
             elif self.expire_var.get().strip() or self.rent_var.get().strip():
-                # 首次配置时若填写了提醒天数，保存存储后一并写入
                 expire = parse_int(self.expire_var.get() or "7", "合同到期提前提醒天数")
                 rent = parse_int(self.rent_var.get() or "7", "按月应收提前提醒天数")
 
             storage_just_set = self.services.settings.update(
                 app_name=app_name,
-                data_storage_path=storage_path if not was_ready else None,
-                lease_expire_remind_days=expire if was_ready else None,
-                rent_due_remind_days=rent if was_ready else None,
+                data_storage_path=None if (was_ready or portable) else storage_path,
+                lease_expire_remind_days=expire if (was_ready or portable) else None,
+                rent_due_remind_days=rent if (was_ready or portable) else None,
             )
 
             if storage_just_set and self.on_storage_configured:

@@ -5,7 +5,13 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Optional
 
-from app.config import DEFAULT_APP_NAME, get_bootstrap_path, get_legacy_data_dir
+from app.config import (
+    DEFAULT_APP_NAME,
+    get_bootstrap_path,
+    get_legacy_data_dir,
+    get_portable_data_dir,
+    is_frozen,
+)
 
 
 @dataclass
@@ -15,13 +21,16 @@ class BootstrapData:
 
 
 class BootstrapConfig:
-    """应用引导配置（固定目录），用于存放应用名与数据存储位置。"""
+    """应用引导配置，用于存放应用名与数据存储位置。"""
 
     def __init__(self, path: Optional[Path] = None) -> None:
         self.path = path or get_bootstrap_path()
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._data = self._load()
-        self._maybe_migrate_legacy()
+        if is_frozen() and path is None:
+            self._ensure_portable_storage()
+        else:
+            self._maybe_migrate_legacy()
 
     def _load(self) -> BootstrapData:
         if not self.path.exists():
@@ -43,12 +52,23 @@ class BootstrapConfig:
             encoding="utf-8",
         )
 
+    def _ensure_portable_storage(self) -> None:
+        """打包版固定使用程序目录下 data，且不可变更。"""
+        data_dir = get_portable_data_dir()
+        data_dir.mkdir(parents=True, exist_ok=True)
+        resolved = str(data_dir.resolve())
+        if self._data.data_storage_path != resolved:
+            self._data.data_storage_path = resolved
+            self._save()
+
     def _maybe_migrate_legacy(self) -> None:
         """若尚未配置存储位置，但旧默认目录已有数据库，则自动沿用。"""
         if self.is_storage_configured():
             return
         # 仅对真实引导配置文件做迁移，避免测试/自定义路径误命中本机旧数据
         if self.path.resolve() != get_bootstrap_path().resolve():
+            return
+        if is_frozen():
             return
         legacy_db = get_legacy_data_dir() / "tally.db"
         if legacy_db.exists():
@@ -57,6 +77,8 @@ class BootstrapConfig:
 
     def reload(self) -> None:
         self._data = self._load()
+        if is_frozen() and self.path.resolve() == get_bootstrap_path().resolve():
+            self._ensure_portable_storage()
 
     @property
     def app_name(self) -> str:
@@ -73,6 +95,9 @@ class BootstrapConfig:
         path = self._data.data_storage_path.strip()
         return bool(path)
 
+    def is_portable(self) -> bool:
+        return is_frozen()
+
     def get_data_storage_path(self) -> Optional[Path]:
         if not self.is_storage_configured():
             return None
@@ -85,6 +110,8 @@ class BootstrapConfig:
         return storage / "tally.db"
 
     def set_data_storage_path(self, path: str | Path) -> Path:
+        if is_frozen():
+            raise ValueError("打包版数据存储位置固定为程序目录下的 data，不可修改")
         if self.is_storage_configured():
             raise ValueError("数据存储位置已配置，不可修改")
         storage = Path(path).expanduser().resolve()

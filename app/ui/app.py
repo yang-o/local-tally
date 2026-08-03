@@ -11,7 +11,8 @@ from app.ui.pages.payments import PaymentsPage
 from app.ui.pages.projects import ProjectsPage
 from app.ui.pages.rooms import RoomsPage
 from app.ui.pages.settings import SettingsPage
-from app.ui.utils import show_info
+from app.ui.utils import show_error, show_info
+from app.uninstall import uninstall_portable_app
 
 
 class TallyApp(ctk.CTk):
@@ -112,6 +113,7 @@ class TallyApp(ctk.CTk):
                 self.services,
                 on_storage_configured=self.initialize_database,
                 on_app_name_changed=lambda _name: self._apply_branding(),
+                on_uninstall=self.uninstall_app,
             ),
         }
         for page in self.pages.values():
@@ -166,6 +168,18 @@ class TallyApp(ctk.CTk):
             return
         self.pages["rooms"].set_project_filter(project_id)
         self.show_page("rooms")
+
+    def uninstall_app(self) -> None:
+        try:
+            self.withdraw()
+            self.update_idletasks()
+            uninstall_portable_app()
+        except Exception as exc:
+            try:
+                self.deiconify()
+            except Exception:
+                pass
+            show_error(f"卸载失败：{exc}")
 
 
 def run_app() -> None:
