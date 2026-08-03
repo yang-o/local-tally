@@ -169,17 +169,17 @@ class ProjectService:
     def get(self, project_id: int) -> Optional[Project]:
         return self.repo.get(project_id)
 
-    def create(self, name: str, address: str) -> int:
+    def create(self, name: str) -> int:
         name = name.strip()
         if not name:
             raise ValidationError("项目名称不能为空")
-        return self.repo.create(name, address.strip())
+        return self.repo.create(name)
 
-    def update(self, project_id: int, name: str, address: str) -> None:
+    def update(self, project_id: int, name: str) -> None:
         name = name.strip()
         if not name:
             raise ValidationError("项目名称不能为空")
-        self.repo.update(project_id, name, address.strip())
+        self.repo.update(project_id, name)
 
     def delete(self, project_id: int) -> None:
         self.repo.delete(project_id)

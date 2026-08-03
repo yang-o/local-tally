@@ -17,16 +17,17 @@ def _parse_date(value: Any) -> Optional[date]:
 class Project:
     id: int
     name: str
-    address: str
+    address: str = ""
     created_at: str = ""
 
     @classmethod
     def from_row(cls, row: Any) -> "Project":
+        keys = row.keys()
         return cls(
             id=row["id"],
             name=row["name"],
-            address=row["address"],
-            created_at=row["created_at"] if "created_at" in row.keys() else "",
+            address=row["address"] if "address" in keys else "",
+            created_at=row["created_at"] if "created_at" in keys else "",
         )
 
 

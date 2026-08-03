@@ -26,7 +26,7 @@ class ReminderServiceTests(unittest.TestCase):
             lease_expire_remind_days=7,
             rent_due_remind_days=7,
         )
-        self.project_id = self.services.projects.create("测试项目", "地址1")  # type: ignore[union-attr]
+        self.project_id = self.services.projects.create("测试项目")  # type: ignore[union-attr]
         self.room_id = self.services.rooms.create(self.project_id, "A101", 50)  # type: ignore[union-attr]
         self.lease_id = self.services.leases.create(  # type: ignore[union-attr]
             room_id=self.room_id,

@@ -9,19 +9,13 @@ from app.ui.widgets import DataTable, FormDialog
 
 class ProjectFormDialog(FormDialog):
     def __init__(self, master, title: str, initial: dict | None = None) -> None:
-        super().__init__(master, title, height=260)
+        super().__init__(master, title, height=220)
         initial = initial or {}
         self.name_var = ctk.StringVar(value=initial.get("name", ""))
-        self.address_var = ctk.StringVar(value=initial.get("address", ""))
-
         self.add_field(0, "项目名称", ctk.CTkEntry(self.body, textvariable=self.name_var))
-        self.add_field(1, "地址", ctk.CTkEntry(self.body, textvariable=self.address_var))
 
     def collect(self) -> dict:
-        return {
-            "name": self.name_var.get().strip(),
-            "address": self.address_var.get().strip(),
-        }
+        return {"name": self.name_var.get().strip()}
 
 
 class ProjectsPage(ctk.CTkFrame):
@@ -86,14 +80,12 @@ class ProjectsPage(ctk.CTkFrame):
             self,
             columns=[
                 ("id", "ID", 60),
-                ("name", "项目名称", 220),
-                ("address", "地址", 360),
-                ("created_at", "创建时间", 180),
+                ("name", "项目名称", 360),
+                ("created_at", "创建时间", 200),
             ],
             column_anchors={
                 "id": "center",
                 "name": "w",
-                "address": "w",
                 "created_at": "center",
             },
             style_prefix="TallyProject",
@@ -115,7 +107,7 @@ class ProjectsPage(ctk.CTkFrame):
         projects = self.services.projects.list_all()
         if keyword:
             projects = [p for p in projects if keyword in (p.name or "").lower()]
-        rows = [(p.id, p.name, p.address, p.created_at) for p in projects]
+        rows = [(p.id, p.name, p.created_at) for p in projects]
         self.table.set_rows(rows, [str(p.id) for p in projects])
 
     def create_project(self) -> None:
@@ -140,10 +132,7 @@ class ProjectsPage(ctk.CTkFrame):
         data = ProjectFormDialog(
             self,
             "编辑项目",
-            {
-                "name": project.name,
-                "address": project.address,
-            },
+            {"name": project.name},
         ).show()
         if not data:
             return

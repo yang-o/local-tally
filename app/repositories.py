@@ -79,23 +79,23 @@ class ProjectRepository:
             ).fetchone()
         return Project.from_row(row) if row else None
 
-    def create(self, name: str, address: str) -> int:
+    def create(self, name: str) -> int:
         with self.db.connect() as conn:
             cur = conn.execute(
                 "INSERT INTO projects (name, address) VALUES (?, ?)",
-                (name, address),
+                (name, ""),
             )
             return int(cur.lastrowid)
 
-    def update(self, project_id: int, name: str, address: str) -> None:
+    def update(self, project_id: int, name: str) -> None:
         with self.db.connect() as conn:
             conn.execute(
                 """
                 UPDATE projects
-                SET name = ?, address = ?
+                SET name = ?
                 WHERE id = ?
                 """,
-                (name, address, project_id),
+                (name, project_id),
             )
 
     def delete(self, project_id: int) -> None:
