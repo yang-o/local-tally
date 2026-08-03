@@ -671,10 +671,9 @@ class DataTable(ctk.CTkFrame):
                 text="暂无数据",
                 bg=self.ROW_BG,
                 fg="#9ca3af",
-                font=("PingFang SC", 13),
+                font=self.EMPTY_FONT,
             ).pack(fill="both", expand=True, pady=24)
         else:
-            row_count = len(page_rows)
             for row_idx, row in enumerate(page_rows):
                 iid = page_iids[row_idx]
                 tag = page_tags[row_idx] if row_idx < len(page_tags) else ""
@@ -694,12 +693,13 @@ class DataTable(ctk.CTkFrame):
                     emphasize = (
                         not self._emphasis_columns or col_id in self._emphasis_columns
                     )
+                    raw = "" if value is None else str(value)
                     cell = self._make_cell(
                         self.body,
-                        "" if value is None else str(value),
+                        self._ellipsize(raw, col_idx),
                         bg=bg,
                         fg=fg if emphasize else "#111827",
-                        font=font if emphasize else ("PingFang SC", 13),
+                        font=font if emphasize else self.CELL_FONT,
                         anchor=anchor,
                         height=self._current_rowheight,
                     )
