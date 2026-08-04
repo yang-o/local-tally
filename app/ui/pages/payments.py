@@ -286,13 +286,13 @@ class PaymentsPage(ctk.CTkFrame):
         self.table = DataTable(
             self,
             columns=[
-                ("id", "ID", 50),
+                ("id", "ID", 48),
                 ("project", "项目", 120),
-                ("room", "房间", 80),
-                ("period", "对应租赁周期", 200),
+                ("room", "房间", 70),
+                ("period", "对应租赁周期", 220),
                 ("amount", "金额", 90),
                 ("paid_at", "实缴日期", 110),
-                ("note", "备注", 180),
+                ("note", "备注", 200),
             ],
             column_anchors={
                 "id": "center",
@@ -304,6 +304,7 @@ class PaymentsPage(ctk.CTkFrame):
                 "note": "w",
             },
             style_prefix="TallyPayment",
+            rowheight=34,
         )
         self.table.grid(row=1, column=0, sticky="nsew")
 

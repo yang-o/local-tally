@@ -256,9 +256,12 @@ class DataTable(ctk.CTkFrame):
     ROW_BG_ALT = "#f8fafc"
     SELECT_BG = "#dbeafe"
     SCROLL_GUTTER = 16
-    CELL_FONT = ("PingFang SC", 12)
-    HEADER_FONT = ("PingFang SC", 12, "bold")
-    EMPTY_FONT = ("PingFang SC", 12)
+    CELL_FONT = ("PingFang SC", 11)
+    HEADER_FONT = ("PingFang SC", 11, "bold")
+    EMPTY_FONT = ("PingFang SC", 11)
+    CELL_PADX = 5
+    CELL_PADY = 4
+    MAX_WRAP_LINES = 4
 
     def __init__(
         self,
@@ -266,7 +269,7 @@ class DataTable(ctk.CTkFrame):
         columns: Sequence[tuple[str, str, int]],
         on_select: Optional[Callable[[], None]] = None,
         column_anchors: Optional[dict[str, str]] = None,
-        rowheight: int = 30,
+        rowheight: int = 34,
         style_prefix: str = "Tally",
         page_size: int = 20,
         enable_pagination: bool = True,
@@ -447,7 +450,12 @@ class DataTable(ctk.CTkFrame):
                 anchor="center",
                 justify="center",
             )
-            label.pack(fill="both", expand=True, padx=6, pady=5)
+            label.pack(
+                fill="both",
+                expand=True,
+                padx=self.CELL_PADX,
+                pady=self.CELL_PADY,
+            )
             self._header_cells.append(cell)
             self._bind_wheel(cell)
             self._bind_wheel(label)
@@ -473,6 +481,7 @@ class DataTable(ctk.CTkFrame):
         self._col_minsizes = sizes
         self._apply_column_minsizes()
         self.canvas.itemconfigure(self._canvas_window, width=available)
+        self._apply_wraplengths()
         self._pin_body_window()
 
     def _on_table_configure(self, _event=None) -> None:
@@ -551,45 +560,63 @@ class DataTable(ctk.CTkFrame):
         self._render_page()
 
     def set_rowheight(self, rowheight: int) -> None:
-        self._base_rowheight = max(24, int(rowheight))
+        self._base_rowheight = max(28, int(rowheight))
         self._current_rowheight = self._base_rowheight
+
+    def _col_wraplength(self, col_idx: int) -> int:
+        minsize = (
+            self._col_minsizes[col_idx]
+            if col_idx < len(self._col_minsizes)
+            else 80
+        )
+        return max(40, minsize - self.CELL_PADX * 2 - 2)
+
+    def _chars_per_line(self, col_idx: int) -> int:
+        # 中文字号约等于像素宽度
+        char_px = max(8, int(self.CELL_FONT[1]))
+        return max(4, self._col_wraplength(col_idx) // char_px)
+
+    def _estimate_lines(self, text: str, col_idx: int) -> int:
+        if not text:
+            return 1
+        per_line = self._chars_per_line(col_idx)
+        total = 0
+        for part in str(text).split("\n"):
+            total += max(1, (len(part) + per_line - 1) // per_line)
+        return min(self.MAX_WRAP_LINES, max(1, total))
 
     def _auto_rowheight_for(self, rows: Sequence[Sequence[object]]) -> int:
         max_lines = 1
         for row in rows:
-            for cell in row:
-                if isinstance(cell, str):
-                    max_lines = max(max_lines, cell.count("\n") + 1)
-        if max_lines <= 1:
-            return self._base_rowheight
-        return max(self._base_rowheight, 18 * max_lines + 10)
+            for col_idx, cell in enumerate(row):
+                text = "" if cell is None else str(cell)
+                max_lines = max(max_lines, self._estimate_lines(text, col_idx))
+        line_h = int(self.CELL_FONT[1]) + 7
+        return max(self._base_rowheight, line_h * max_lines + self.CELL_PADY * 2)
 
     def _font_from_style(self, style: dict[str, object]) -> tuple:
         font_spec = style.get("font")
         if isinstance(font_spec, tuple) and font_spec:
             family = str(font_spec[0]) if font_spec[0] else self.CELL_FONT[0]
             size = int(font_spec[1]) if len(font_spec) > 1 else self.CELL_FONT[1]
-            # 标签字体也不超过默认列表字号太多，避免撑列
-            size = min(size, self.CELL_FONT[1] + 1)
+            # 标签字体不超过默认列表字号，避免撑列裁切
+            size = min(size, self.CELL_FONT[1])
             if len(font_spec) > 2 and font_spec[2] == "bold":
                 return (family, size, "bold")
             return (family, size)
         return self.CELL_FONT
 
-    def _ellipsize(self, text: str, col_idx: int) -> str:
-        """按列宽裁剪单行文本，尽量不超出默认列宽。"""
-        if not text or "\n" in text:
-            return text
-        minsize = (
-            self._col_minsizes[col_idx]
-            if col_idx < len(self._col_minsizes)
-            else 80
-        )
-        # 字号 12 时中文约 12px/字，扣除左右 padding
-        max_chars = max(4, (minsize - 12) // 12)
-        if len(text) <= max_chars:
-            return text
-        return text[: max(1, max_chars - 1)] + "…"
+    def _apply_wraplengths(self) -> None:
+        """列宽变化后同步换行宽度，避免文字被裁切。"""
+        for cells in self._row_widgets.values():
+            for col_idx, cell in enumerate(cells):
+                wrap = self._col_wraplength(col_idx)
+                for child in cell.winfo_children():
+                    if isinstance(child, tk.Label):
+                        try:
+                            child.configure(wraplength=wrap)
+                        except tk.TclError:
+                            pass
 
     def clear(self) -> None:
         for child in self.body.winfo_children():
@@ -654,6 +681,7 @@ class DataTable(ctk.CTkFrame):
         font: tuple,
         anchor: str,
         height: int | None = None,
+        wraplength: int = 0,
     ) -> tk.Frame:
         cell = tk.Frame(
             parent,
@@ -674,8 +702,14 @@ class DataTable(ctk.CTkFrame):
             font=font,
             anchor=self._to_anchor(anchor),
             justify=self._to_justify(anchor),
+            wraplength=wraplength,
         )
-        label.pack(fill="both", expand=True, padx=6, pady=3)
+        label.pack(
+            fill="both",
+            expand=True,
+            padx=self.CELL_PADX,
+            pady=self.CELL_PADY,
+        )
         return cell
 
     def _render_page(self) -> None:
@@ -733,12 +767,13 @@ class DataTable(ctk.CTkFrame):
                     raw = "" if value is None else str(value)
                     cell = self._make_cell(
                         self.body,
-                        self._ellipsize(raw, col_idx),
+                        raw,
                         bg=bg,
                         fg=fg if emphasize else "#111827",
                         font=font if emphasize else self.CELL_FONT,
                         anchor=anchor,
                         height=self._current_rowheight,
+                        wraplength=self._col_wraplength(col_idx),
                     )
                     cell.grid(
                         row=row_idx,

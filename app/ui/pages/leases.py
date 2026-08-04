@@ -203,15 +203,15 @@ class LeasesPage(ctk.CTkFrame):
         self.table = DataTable(
             self,
             columns=[
-                ("id", "ID", 50),
-                ("project", "项目", 110),
+                ("id", "ID", 48),
+                ("project", "项目", 120),
                 ("room", "房间", 70),
                 ("deposit", "押金", 80),
                 ("rent", "月租金", 80),
-                ("period", "缴费周期", 70),
-                ("term", "租期（起租~到期）", 200),
-                ("free", "免租期", 200),
-                ("status", "状态", 70),
+                ("period", "缴费周期", 72),
+                ("term", "租期（起租~到期）", 210),
+                ("free", "免租期", 210),
+                ("status", "状态", 60),
             ],
             column_anchors={
                 "id": "center",
@@ -221,11 +221,11 @@ class LeasesPage(ctk.CTkFrame):
                 "rent": "e",
                 "period": "center",
                 "term": "center",
-                "free": "center",
+                "free": "w",
                 "status": "center",
             },
             style_prefix="TallyLease",
-            rowheight=30,
+            rowheight=34,
         )
         self.table.grid(row=1, column=0, sticky="nsew")
 

@@ -44,24 +44,22 @@ class HomePage(ctk.CTkFrame):
         self.table = DataTable(
             self,
             columns=[
-                ("days", "天数", 140),
-                ("kind", "类型", 110),
+                ("days", "天数", 120),
+                ("kind", "类型", 100),
                 ("project", "项目", 140),
                 ("room", "房间", 90),
-                ("period", "周期/合同", 180),
-                ("amount", "金额", 90),
-                ("detail", "说明", 260),
+                ("amount", "金额", 100),
+                ("period", "周期", 260),
             ],
             column_anchors={
                 "days": "center",
                 "kind": "center",
                 "project": "w",
                 "room": "center",
-                "period": "center",
                 "amount": "e",
-                "detail": "w",
+                "period": "center",
             },
-            rowheight=32,
+            rowheight=34,
             style_prefix="TallyReminder",
             emphasis_columns=("days",),
         )
@@ -75,28 +73,28 @@ class HomePage(ctk.CTkFrame):
             "overdue",
             foreground="#b91c1c",
             background="#fef2f2",
-            font=("PingFang SC", 12, "bold"),
+            font=("PingFang SC", 11, "bold"),
         )
         # 今天：琥珀
         tree.tag_configure(
             "today",
             foreground="#b45309",
             background="#fffbeb",
-            font=("PingFang SC", 12, "bold"),
+            font=("PingFang SC", 11, "bold"),
         )
         # ≤3 天：橙
         tree.tag_configure(
             "urgent",
             foreground="#c2410c",
             background="#fff7ed",
-            font=("PingFang SC", 12, "bold"),
+            font=("PingFang SC", 11, "bold"),
         )
         # 提醒窗口内其余：黄（警示，非绿）
         tree.tag_configure(
             "upcoming",
             foreground="#a16207",
             background="#fefce8",
-            font=("PingFang SC", 12, "bold"),
+            font=("PingFang SC", 11, "bold"),
         )
 
     def refresh(self) -> None:
@@ -123,9 +121,8 @@ class HomePage(ctk.CTkFrame):
                     item.kind,
                     item.project_name,
                     item.room_no,
-                    period,
                     format_money(item.amount),
-                    item.detail,
+                    period,
                 )
             )
             iids.append(str(idx))
