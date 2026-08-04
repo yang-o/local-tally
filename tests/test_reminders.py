@@ -46,14 +46,28 @@ class ReminderServiceTests(unittest.TestCase):
     def test_generate_periods_and_multiple_free_months(self) -> None:
         lease = self.services.leases.get(self.lease_id)  # type: ignore[union-attr]
         assert lease is not None
+        self.assertEqual(lease.payment_period, "季度")
         self.assertEqual(len(lease.free_periods or []), 2)
         periods = self.services.reminders.generate_rent_periods(lease)  # type: ignore[union-attr]
-        free_starts = {p.period_start for p in periods if p.fully_free}
-        self.assertIn(date(2026, 1, 15), free_starts)
-        self.assertIn(date(2026, 5, 15), free_starts)
-        paid_like = next(p for p in periods if p.period_start == date(2026, 2, 15))
-        self.assertFalse(paid_like.fully_free)
-        self.assertEqual(paid_like.amount, 3000)
+        # 默认按季度：2026-01-15~04-14 / 04-15~07-14 / 07-15~08-14
+        self.assertEqual(
+            [(p.period_start, p.period_end) for p in periods],
+            [
+                (date(2026, 1, 15), date(2026, 4, 14)),
+                (date(2026, 4, 15), date(2026, 7, 14)),
+                (date(2026, 7, 15), date(2026, 8, 14)),
+            ],
+        )
+        first = periods[0]
+        self.assertFalse(first.fully_free)
+        self.assertTrue(first.partial_free)
+        # 首季含整月免租 1.15~2.14，另两月应收 → 6000
+        self.assertEqual(first.amount, 6000)
+        second = periods[1]
+        self.assertTrue(second.partial_free)
+        # 次季含整月免租 5.15~6.14 → 6000
+        self.assertEqual(second.amount, 6000)
+        self.assertEqual(periods[2].amount, 3000)
 
     def test_reject_overlapping_free_periods(self) -> None:
         with self.assertRaises(ValidationError):
@@ -73,7 +87,7 @@ class ReminderServiceTests(unittest.TestCase):
         lease = self.services.leases.get(self.lease_id)  # type: ignore[union-attr]
         assert lease is not None
         unpaid = self.services.reminders.unpaid_periods(lease, today=date(2026, 3, 1))  # type: ignore[union-attr]
-        target = next(p for p in unpaid if p.period_start == date(2026, 2, 15))
+        target = next(p for p in unpaid if p.period_start == date(2026, 1, 15))
         self.services.payments.create(  # type: ignore[union-attr]
             lease_id=self.lease_id,
             period_start=target.period_start,
@@ -85,13 +99,43 @@ class ReminderServiceTests(unittest.TestCase):
             lease, today=date(2026, 3, 1)
         )
         self.assertFalse(
-            any(p.period_start == date(2026, 2, 15) for p in unpaid_after)
+            any(p.period_start == date(2026, 1, 15) for p in unpaid_after)
         )
 
     def test_due_reminder_appears(self) -> None:
-        reminders = self.services.reminders.list_reminders(today=date(2026, 2, 10))  # type: ignore[union-attr]
+        # 首个季度起日 2026-01-15，提前 7 天提醒窗口内
+        reminders = self.services.reminders.list_reminders(today=date(2026, 1, 10))  # type: ignore[union-attr]
         kinds = {r.kind for r in reminders}
         self.assertIn("应收提醒", kinds)
+        rent_items = [r for r in reminders if r.kind == "应收提醒"]
+        self.assertTrue(
+            any(
+                r.period_start == date(2026, 1, 15)
+                and r.period_end == date(2026, 4, 14)
+                for r in rent_items
+            )
+        )
+
+    def test_half_year_payment_period(self) -> None:
+        lease_id = self.services.leases.create(  # type: ignore[union-attr]
+            room_id=self.room_id,
+            deposit=1000,
+            monthly_rent=2000,
+            start_date=date(2028, 1, 1),
+            end_date=date(2028, 12, 31),
+            free_periods=[],
+            payment_period="半年",
+        )
+        lease = self.services.leases.get(lease_id)  # type: ignore[union-attr]
+        assert lease is not None
+        periods = self.services.reminders.generate_rent_periods(lease)  # type: ignore[union-attr]
+        self.assertEqual(
+            [(p.period_start, p.period_end, p.amount) for p in periods],
+            [
+                (date(2028, 1, 1), date(2028, 6, 30), 12000.0),
+                (date(2028, 7, 1), date(2028, 12, 31), 12000.0),
+            ],
+        )
 
 
 class BootstrapConfigTests(unittest.TestCase):

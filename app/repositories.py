@@ -319,13 +319,15 @@ class LeaseRepository:
         start_date: date,
         end_date: date,
         free_periods: list[tuple[date, date]],
+        payment_period: str,
     ) -> int:
         with self.db.connect() as conn:
             cur = conn.execute(
                 """
                 INSERT INTO leases (
-                    room_id, deposit, monthly_rent, start_date, end_date, status
-                ) VALUES (?, ?, ?, ?, ?, '生效')
+                    room_id, deposit, monthly_rent, start_date, end_date,
+                    status, payment_period
+                ) VALUES (?, ?, ?, ?, ?, '生效', ?)
                 """,
                 (
                     room_id,
@@ -333,6 +335,7 @@ class LeaseRepository:
                     monthly_rent,
                     start_date.isoformat(),
                     end_date.isoformat(),
+                    payment_period,
                 ),
             )
             lease_id = int(cur.lastrowid)
@@ -348,13 +351,14 @@ class LeaseRepository:
         end_date: date,
         free_periods: list[tuple[date, date]],
         status: str,
+        payment_period: str,
     ) -> None:
         with self.db.connect() as conn:
             conn.execute(
                 """
                 UPDATE leases
                 SET deposit = ?, monthly_rent = ?, start_date = ?, end_date = ?,
-                    status = ?
+                    status = ?, payment_period = ?
                 WHERE id = ?
                 """,
                 (
@@ -363,6 +367,7 @@ class LeaseRepository:
                     start_date.isoformat(),
                     end_date.isoformat(),
                     status,
+                    payment_period,
                     lease_id,
                 ),
             )

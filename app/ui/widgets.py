@@ -326,12 +326,12 @@ class DataTable(ctk.CTkFrame):
             bd=0,
             highlightthickness=0,
         )
-        self.header_gutter.grid(row=0, column=1, sticky="nsew", pady=(0, 1))
+        self.header_gutter.grid(row=0, column=1, sticky="nsew")
         self.header_gutter.grid_propagate(False)
 
-        # 表体紧贴表头下方；外框底边由 table_wrap.highlightthickness 保证
+        # 表体紧贴表头下方（零间距），外框底边由 table_wrap.highlightthickness 保证
         self.body_bar = tk.Frame(table_wrap, bg=self.BORDER_COLOR, bd=0, highlightthickness=0)
-        self.body_bar.pack(side="top", fill="both", expand=True)
+        self.body_bar.pack(side="top", fill="both", expand=True, pady=0)
         self.body_bar.grid_rowconfigure(0, weight=1)
         self.body_bar.grid_columnconfigure(0, weight=1)
         self.body_bar.grid_columnconfigure(1, minsize=self.SCROLL_GUTTER, weight=0)
@@ -357,9 +357,14 @@ class DataTable(ctk.CTkFrame):
         self.body.bind("<Configure>", self._on_body_configure)
         self.canvas.bind("<Configure>", self._on_canvas_configure)
         self.table_wrap.bind("<Configure>", self._on_table_configure)
-        for w in (self.canvas, self.body, self.table_wrap):
-            w.bind("<Enter>", self._bind_mousewheel)
-            w.bind("<Leave>", self._unbind_mousewheel)
+        # 仅绑定本表控件，避免 CTk 禁用的 bind_all，也避免全局滚动副作用
+        self._bind_wheel(self.canvas)
+        self._bind_wheel(self.body)
+        self._bind_wheel(self.table_wrap)
+        self._bind_wheel(self.header_bar)
+        self._bind_wheel(self.header)
+        self._bind_wheel(self.header_gutter)
+        self._bind_wheel(self.body_bar)
 
         self.tree = self  # 兼容 table.tree.tag_configure
 
@@ -372,17 +377,49 @@ class DataTable(ctk.CTkFrame):
 
         self.after(50, self._sync_column_widths)
 
-    def _bind_mousewheel(self, _event=None) -> None:
-        self.canvas.bind_all("<MouseWheel>", self._on_mousewheel)
+    def _bind_wheel(self, widget: tk.Misc) -> None:
+        widget.bind("<MouseWheel>", self._on_mousewheel, add="+")
 
-    def _unbind_mousewheel(self, _event=None) -> None:
-        self.canvas.unbind_all("<MouseWheel>")
+    def _on_mousewheel(self, event) -> str:
+        if not self.canvas.winfo_exists():
+            return "break"
+        if not self._can_vertically_scroll():
+            return "break"
+        if getattr(event, "delta", 0):
+            # macOS 触控板 delta 常为小整数；Windows 多为 ±120
+            if abs(event.delta) >= 120:
+                delta = int(-1 * (event.delta / 120))
+            else:
+                delta = -1 if event.delta > 0 else 1
+        else:
+            delta = -1 if getattr(event, "num", 0) == 4 else 1
+        self.canvas.yview_scroll(delta, "units")
+        self._pin_body_window()
+        return "break"
 
-    def _on_mousewheel(self, event) -> None:
+    def _can_vertically_scroll(self) -> bool:
+        try:
+            first, last = self.canvas.yview()
+            return not (first <= 0.0 and last >= 1.0)
+        except tk.TclError:
+            return False
+
+    def _pin_body_window(self) -> None:
+        """将表体窗口钉在画布坐标原点，并固定 scrollregion，避免滚动后与表头脱节。"""
         if not self.canvas.winfo_exists():
             return
-        delta = int(-1 * (event.delta / 120)) if abs(event.delta) >= 120 else (-1 if event.delta > 0 else 1)
-        self.canvas.yview_scroll(delta, "units")
+        self.canvas.coords(self._canvas_window, 0, 0)
+        self.body.update_idletasks()
+        width = max(self.canvas.winfo_width(), self.body.winfo_reqwidth(), 1)
+        height = max(self.body.winfo_reqheight(), 1)
+        # 强制从 (0,0) 起算，避免 bbox 漂移留下顶部空隙
+        self.canvas.configure(scrollregion=(0, 0, width, height))
+        # 夹紧滚动位置，防止滚出内容区
+        first, _last = self.canvas.yview()
+        if first < 0:
+            self.canvas.yview_moveto(0)
+        elif first > 0 and not self._can_vertically_scroll():
+            self.canvas.yview_moveto(0)
 
     def _build_header_cells(self) -> None:
         for child in self.header.winfo_children():
@@ -412,6 +449,8 @@ class DataTable(ctk.CTkFrame):
             )
             label.pack(fill="both", expand=True, padx=6, pady=5)
             self._header_cells.append(cell)
+            self._bind_wheel(cell)
+            self._bind_wheel(label)
 
     def _apply_column_minsizes(self) -> None:
         for idx, minsize in enumerate(self._col_minsizes):
@@ -433,20 +472,18 @@ class DataTable(ctk.CTkFrame):
             sizes[-1] = max(40, sizes[-1] + diff)
         self._col_minsizes = sizes
         self._apply_column_minsizes()
-        self.canvas.coords(self._canvas_window, 0, 0)
         self.canvas.itemconfigure(self._canvas_window, width=available)
+        self._pin_body_window()
 
     def _on_table_configure(self, _event=None) -> None:
         self._sync_column_widths()
 
     def _on_canvas_configure(self, event) -> None:
-        self.canvas.coords(self._canvas_window, 0, 0)
         self.canvas.itemconfigure(self._canvas_window, width=max(1, event.width))
-        self._sync_column_widths()
+        self._pin_body_window()
 
     def _on_body_configure(self, _event=None) -> None:
-        self.canvas.coords(self._canvas_window, 0, 0)
-        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+        self._pin_body_window()
 
     @staticmethod
     def _to_anchor(anchor: str) -> str:
@@ -713,15 +750,15 @@ class DataTable(ctk.CTkFrame):
                     label = cell.winfo_children()[0]
                     for widget in (cell, label):
                         widget.bind("<Button-1>", lambda _e, i=iid: self._select_row(i))
+                        self._bind_wheel(widget)
                     cells.append(cell)
                 self._row_widgets[iid] = cells
                 if self._selected_iid == iid:
                     self._select_row(iid)
 
         self.after_idle(self._sync_column_widths)
-        self.canvas.coords(self._canvas_window, 0, 0)
-        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
-
+        self._pin_body_window()
+        self.canvas.yview_moveto(0)
 
 
         if self._enable_pagination:

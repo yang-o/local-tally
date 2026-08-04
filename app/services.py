@@ -9,8 +9,10 @@ from app.bootstrap import BootstrapConfig
 from app.database import Database
 from app.models import (
     AppSettings,
+    DEFAULT_PAYMENT_PERIOD,
     FreePeriod,
     Lease,
+    PAYMENT_PERIOD_OPTIONS,
     Payment,
     Project,
     ReminderItem,
@@ -302,19 +304,25 @@ class LeaseService:
         start_date: date,
         end_date: date,
         free_periods: list[tuple[date, date]] | list[FreePeriod],
+        payment_period: str,
         exclude_id: Optional[int] = None,
-    ) -> list[tuple[date, date]]:
+    ) -> tuple[list[tuple[date, date]], str]:
         if deposit < 0 or monthly_rent < 0:
             raise ValidationError("押金和月租金不能为负数")
         if end_date < start_date:
             raise ValidationError("到期时间不能早于起租时间")
+        period = (payment_period or "").strip()
+        if not period:
+            raise ValidationError("缴费周期不能为空")
+        if period not in PAYMENT_PERIOD_OPTIONS:
+            raise ValidationError("缴费周期无效")
         normalized = self._normalize_free_periods(free_periods, start_date, end_date)
         overlap = self.repo.find_overlap(room_id, start_date, end_date, exclude_id)
         if overlap:
             raise ValidationError(
                 f"与已有生效合同时间重叠（{overlap.start_date} ~ {overlap.end_date}）"
             )
-        return normalized
+        return normalized, period
 
     def create(
         self,
@@ -324,17 +332,25 @@ class LeaseService:
         start_date: date,
         end_date: date,
         free_periods: list[tuple[date, date]] | None = None,
+        payment_period: str = DEFAULT_PAYMENT_PERIOD,
     ) -> int:
-        normalized = self._validate(
+        normalized, period = self._validate(
             room_id,
             deposit,
             monthly_rent,
             start_date,
             end_date,
             free_periods or [],
+            payment_period,
         )
         lease_id = self.repo.create(
-            room_id, deposit, monthly_rent, start_date, end_date, normalized
+            room_id,
+            deposit,
+            monthly_rent,
+            start_date,
+            end_date,
+            normalized,
+            period,
         )
         self.room_service.refresh_status(room_id)
         return lease_id
@@ -348,6 +364,7 @@ class LeaseService:
         end_date: date,
         free_periods: list[tuple[date, date]] | list[FreePeriod] | None,
         status: str,
+        payment_period: str = DEFAULT_PAYMENT_PERIOD,
     ) -> None:
         lease = self.repo.get(lease_id)
         if not lease:
@@ -356,18 +373,24 @@ class LeaseService:
             raise ValidationError("租赁状态无效")
         periods = free_periods if free_periods is not None else (lease.free_periods or [])
         if status == "生效":
-            normalized = self._validate(
+            normalized, period = self._validate(
                 lease.room_id,
                 deposit,
                 monthly_rent,
                 start_date,
                 end_date,
                 periods,
+                payment_period,
                 exclude_id=lease_id,
             )
         else:
             if end_date < start_date:
                 raise ValidationError("到期时间不能早于起租时间")
+            period = (payment_period or "").strip()
+            if not period:
+                raise ValidationError("缴费周期不能为空")
+            if period not in PAYMENT_PERIOD_OPTIONS:
+                raise ValidationError("缴费周期无效")
             normalized = self._normalize_free_periods(periods, start_date, end_date)
         self.repo.update(
             lease_id,
@@ -377,6 +400,7 @@ class LeaseService:
             end_date,
             normalized,
             status,
+            period,
         )
         self.room_service.refresh_status(lease.room_id)
 
@@ -463,23 +487,21 @@ class ReminderService:
 
     def generate_rent_periods(self, lease: Lease) -> list[RentPeriod]:
         periods: list[RentPeriod] = []
+        step = lease.period_months
+        free_ranges = [(p.start_date, p.end_date) for p in (lease.free_periods or [])]
         cursor = lease.start_date
         index = 0
         while cursor <= lease.end_date:
-            next_start = _add_months(lease.start_date, index + 1)
+            next_start = _add_months(lease.start_date, (index + 1) * step)
             period_end = min(next_start - timedelta(days=1), lease.end_date)
             if period_end < cursor:
                 break
 
-            free_ranges = [
-                (p.start_date, p.end_date) for p in (lease.free_periods or [])
-            ]
             fully_free = _range_fully_covered(cursor, period_end, free_ranges)
             partial_free = (not fully_free) and _range_any_overlap(
                 cursor, period_end, free_ranges
             )
-
-            amount = 0.0 if fully_free else float(lease.monthly_rent)
+            amount = self._period_amount(lease, cursor, period_end, free_ranges)
             periods.append(
                 RentPeriod(
                     lease_id=lease.id,
@@ -493,6 +515,36 @@ class ReminderService:
             index += 1
             cursor = next_start
         return periods
+
+    def _period_amount(
+        self,
+        lease: Lease,
+        period_start: date,
+        period_end: date,
+        free_ranges: list[tuple[date, date]],
+    ) -> float:
+        """按月切片累计应收：整月免租不计，其余按月租金计。"""
+        if _range_fully_covered(period_start, period_end, free_ranges):
+            return 0.0
+        total = 0.0
+        month_idx = 0
+        while True:
+            slice_start = _add_months(lease.start_date, month_idx)
+            if slice_start > period_end:
+                break
+            slice_end = min(
+                _add_months(lease.start_date, month_idx + 1) - timedelta(days=1),
+                lease.end_date,
+            )
+            overlap_start = max(slice_start, period_start)
+            overlap_end = min(slice_end, period_end)
+            if overlap_end >= overlap_start:
+                if not _range_fully_covered(overlap_start, overlap_end, free_ranges):
+                    total += float(lease.monthly_rent)
+            month_idx += 1
+            if month_idx > 600:
+                break
+        return round(total, 2)
 
     def is_period_paid(self, lease_id: int, period: RentPeriod) -> bool:
         payments = self.payment_repo.list_by_lease(lease_id)
@@ -567,7 +619,7 @@ class ReminderService:
                     )
                 )
 
-            # 按月应收提醒
+            # 按租赁缴费周期生成应收提醒
             for period in self.unpaid_periods(lease, today):
                 remind_from = period.period_start - timedelta(days=rent_days)
                 if today < remind_from:

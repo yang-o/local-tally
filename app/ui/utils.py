@@ -132,6 +132,27 @@ def ask_save_filename(
     return selected or ""
 
 
+def ask_open_filename(
+    title: str = "打开文件",
+    parent=None,
+    filetypes: Optional[list[tuple[str, str]]] = None,
+    initialdir: str | None = None,
+) -> str:
+    top = _dialog_parent(parent)
+    start = initialdir or str(Path.home())
+    try:
+        selected = filedialog.askopenfilename(
+            parent=top,
+            title=title,
+            initialdir=start,
+            filetypes=filetypes or [("所有文件", "*.*")],
+        )
+    except Exception as exc:
+        show_error(f"无法打开文件选择对话框：{exc}")
+        return ""
+    return selected or ""
+
+
 def today_str() -> str:
     return date.today().isoformat()
 

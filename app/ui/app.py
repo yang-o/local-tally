@@ -114,6 +114,7 @@ class TallyApp(ctk.CTk):
                 on_storage_configured=self.initialize_database,
                 on_app_name_changed=lambda _name: self._apply_branding(),
                 on_uninstall=self.uninstall_app,
+                on_database_replaced=self.reload_database,
             ),
         }
         for page in self.pages.values():
@@ -145,6 +146,21 @@ class TallyApp(ctk.CTk):
             self.services.attach_database(Database(db_path))
         self._apply_branding()
         self._sync_nav_state()
+
+    def reload_database(self) -> None:
+        """导入数据库后重新挂载并刷新各页面。"""
+        db_path = self.bootstrap.get_db_path()
+        if db_path is None:
+            return
+        self.services.attach_database(Database(db_path))
+        self._apply_branding()
+        self._sync_nav_state()
+        for page in self.pages.values():
+            if hasattr(page, "refresh"):
+                try:
+                    page.refresh()
+                except Exception:
+                    pass
 
     def show_page(self, key: str) -> None:
         if key != "settings" and not self.services.is_ready:

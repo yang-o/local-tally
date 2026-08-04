@@ -69,18 +69,15 @@ class PaymentFormDialog(FormDialog):
         self.add_field(1, "未缴应收期", self.period_menu)
 
         quick = ctk.CTkFrame(self.body, fg_color="transparent")
-        ctk.CTkButton(quick, text="按月", width=70, command=lambda: self._apply_quick(1)).pack(
-            side="left", padx=(0, 6)
-        )
         ctk.CTkButton(
-            quick, text="按季度", width=70, command=lambda: self._apply_quick(3)
-        ).pack(side="left", padx=6)
+            quick, text="季度", width=70, command=lambda: self._apply_quick(3)
+        ).pack(side="left", padx=(0, 6))
         ctk.CTkButton(
             quick, text="半年", width=70, command=lambda: self._apply_quick(6)
         ).pack(side="left", padx=6)
-        ctk.CTkButton(quick, text="按年", width=70, command=lambda: self._apply_quick(12)).pack(
-            side="left", padx=6
-        )
+        ctk.CTkButton(
+            quick, text="年", width=70, command=lambda: self._apply_quick(12)
+        ).pack(side="left", padx=6)
         self.add_field(2, "快捷周期", quick)
 
         self.start_picker = DatePickerField(self.body, textvariable=self.start_var)

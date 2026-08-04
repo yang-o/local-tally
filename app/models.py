@@ -69,6 +69,22 @@ class FreePeriod:
         return f"{self.start_date.isoformat()} ~ {self.end_date.isoformat()}"
 
 
+PAYMENT_PERIOD_OPTIONS = ("季度", "半年", "年")
+DEFAULT_PAYMENT_PERIOD = "季度"
+PAYMENT_PERIOD_MONTHS = {"季度": 3, "半年": 6, "年": 12}
+
+
+def normalize_payment_period(value: str | None) -> str:
+    text = (value or "").strip()
+    if text not in PAYMENT_PERIOD_OPTIONS:
+        return DEFAULT_PAYMENT_PERIOD
+    return text
+
+
+def payment_period_months(value: str | None) -> int:
+    return PAYMENT_PERIOD_MONTHS[normalize_payment_period(value)]
+
+
 @dataclass
 class Lease:
     id: int
@@ -78,6 +94,7 @@ class Lease:
     start_date: date
     end_date: date
     status: str
+    payment_period: str = DEFAULT_PAYMENT_PERIOD
     free_periods: list[FreePeriod] | None = None
     room_no: str = ""
     project_id: int = 0
@@ -87,6 +104,11 @@ class Lease:
     def __post_init__(self) -> None:
         if self.free_periods is None:
             self.free_periods = []
+        self.payment_period = normalize_payment_period(self.payment_period)
+
+    @property
+    def period_months(self) -> int:
+        return payment_period_months(self.payment_period)
 
     @classmethod
     def from_row(cls, row: Any) -> "Lease":
@@ -99,6 +121,9 @@ class Lease:
             start_date=_parse_date(row["start_date"]),  # type: ignore[arg-type]
             end_date=_parse_date(row["end_date"]),  # type: ignore[arg-type]
             status=row["status"],
+            payment_period=normalize_payment_period(
+                row["payment_period"] if "payment_period" in keys else None
+            ),
             free_periods=[],
             room_no=row["room_no"] if "room_no" in keys else "",
             project_id=row["project_id"] if "project_id" in keys else 0,
