@@ -4,13 +4,22 @@ import os
 import sys
 from pathlib import Path
 
-DEFAULT_APP_NAME = "物业收费登记"
+DEFAULT_APP_NAME = "本地记账"
 BOOTSTRAP_APP_DIR = "Tally"
 
 
 def is_frozen() -> bool:
     """是否为 PyInstaller 打包后的可执行程序。"""
     return bool(getattr(sys, "frozen", False))
+
+
+def get_resource_path(*parts: str) -> Path:
+    """开发与打包环境下的资源路径（如 assets/…）。"""
+    if is_frozen():
+        base = Path(getattr(sys, "_MEIPASS", Path(sys.executable).resolve().parent))
+    else:
+        base = Path(__file__).resolve().parent.parent
+    return base.joinpath(*parts)
 
 
 def get_platform_app_support_dir() -> Path:
@@ -83,6 +92,11 @@ def get_bootstrap_dir() -> Path:
 
 def get_bootstrap_path() -> Path:
     return get_bootstrap_dir() / "bootstrap.json"
+
+
+def get_license_path() -> Path:
+    """License 文件路径（与 bootstrap 同目录）。"""
+    return get_bootstrap_dir() / "license.lic"
 
 
 def get_legacy_data_dir() -> Path:

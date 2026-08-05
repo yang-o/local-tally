@@ -1,10 +1,16 @@
 from __future__ import annotations
 
+import sys
+
 import customtkinter as ctk
+from PIL import Image, ImageTk
 
 from app.bootstrap import BootstrapConfig
+from app.config import get_resource_path
 from app.database import Database
+from app.license import LicenseInfo, LicenseStatus
 from app.services import AppServices
+from app.ui.license_dialog import prompt_import_license
 from app.ui.pages.home import HomePage
 from app.ui.pages.leases import LeasesPage
 from app.ui.pages.payments import PaymentsPage
@@ -27,9 +33,12 @@ class TallyApp(ctk.CTk):
         if db_path is not None:
             db = Database(db_path)
         self.services = AppServices(self.bootstrap, db)
+        self._license_info = self.services.license.check()
+        self._window_icon_image = None
 
         self.geometry("1180x720")
         self.minsize(980, 620)
+        self._apply_window_icon()
 
         self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(1, weight=1)
@@ -39,10 +48,29 @@ class TallyApp(ctk.CTk):
         self._apply_branding()
         self._sync_nav_state()
 
-        if self.services.is_ready:
+        if self.services.can_use_business:
             self.show_page("home")
         else:
             self.show_page("settings")
+
+        self.after(120, self._handle_license_on_startup)
+
+    def _apply_window_icon(self) -> None:
+        """设置窗口/任务栏图标（打包后使用捆绑资源）。"""
+        png = get_resource_path("assets", "app-icon-256.png")
+        if not png.is_file():
+            png = get_resource_path("assets", "app-logo.png")
+        try:
+            if png.is_file():
+                image = Image.open(png).convert("RGBA")
+                self._window_icon_image = ImageTk.PhotoImage(image)
+                self.iconphoto(True, self._window_icon_image)
+            if sys.platform == "win32":
+                ico = get_resource_path("assets", "app.ico")
+                if ico.is_file():
+                    self.iconbitmap(default=str(ico))
+        except Exception:
+            pass
 
     def _build_sidebar(self) -> None:
         self.sidebar = ctk.CTkFrame(self, width=200, corner_radius=0)
@@ -79,6 +107,16 @@ class TallyApp(ctk.CTk):
             btn.pack(fill="x", padx=12, pady=4)
             self.nav_buttons[key] = btn
 
+        self.license_label = ctk.CTkLabel(
+            self.sidebar,
+            text="",
+            font=ctk.CTkFont(size=11),
+            text_color="#9ca3af",
+            wraplength=170,
+            justify="left",
+        )
+        self.license_label.pack(side="bottom", anchor="w", padx=16, pady=(0, 8))
+
         self.data_path_label = ctk.CTkLabel(
             self.sidebar,
             text="数据：未配置",
@@ -87,7 +125,7 @@ class TallyApp(ctk.CTk):
             wraplength=170,
             justify="left",
         )
-        self.data_path_label.pack(side="bottom", anchor="w", padx=16, pady=16)
+        self.data_path_label.pack(side="bottom", anchor="w", padx=16, pady=(0, 16))
 
     def _build_pages(self) -> None:
         self.content = ctk.CTkFrame(self, fg_color=("#f3f4f6", "#111827"))
@@ -115,6 +153,7 @@ class TallyApp(ctk.CTk):
                 on_app_name_changed=lambda _name: self._apply_branding(),
                 on_uninstall=self.uninstall_app,
                 on_database_replaced=self.reload_database,
+                on_license_changed=self._on_license_changed,
             ),
         }
         for page in self.pages.values():
@@ -129,14 +168,65 @@ class TallyApp(ctk.CTk):
             self.data_path_label.configure(text="数据：未配置")
         else:
             self.data_path_label.configure(text=f"数据：{storage}")
+        self._refresh_license_label()
+
+    def _refresh_license_label(self) -> None:
+        info = self._license_info
+        if info.status == LicenseStatus.VALID and info.expires_at is not None:
+            text = f"授权：有效（剩 {info.days_remaining} 天）"
+        elif info.status == LicenseStatus.GRACE and info.grace_end is not None:
+            text = f"授权：宽限期（至 {info.grace_end.isoformat()}）"
+        elif info.status == LicenseStatus.EXPIRED:
+            text = "授权：已过期"
+        elif info.status == LicenseStatus.INVALID:
+            text = "授权：无效"
+        else:
+            text = "授权：未激活"
+        self.license_label.configure(text=text)
 
     def _sync_nav_state(self) -> None:
-        ready = self.services.is_ready
+        allowed = self.services.can_use_business
         for key, btn in self.nav_buttons.items():
             if key == "settings":
                 btn.configure(state="normal")
             else:
-                btn.configure(state="normal" if ready else "disabled")
+                btn.configure(state="normal" if allowed else "disabled")
+
+    def _handle_license_on_startup(self) -> None:
+        info = self.services.license.check()
+        self._license_info = info
+        self._refresh_license_label()
+        self._sync_nav_state()
+        if info.status == LicenseStatus.GRACE:
+            show_info(info.message)
+            return
+        if info.status in {
+            LicenseStatus.MISSING,
+            LicenseStatus.EXPIRED,
+            LicenseStatus.INVALID,
+        }:
+            prompt_import_license(
+                self,
+                self.services.license,
+                info,
+                on_imported=self._on_license_changed,
+            )
+            self._license_info = self.services.license.check()
+            self._refresh_license_label()
+            self._sync_nav_state()
+            if self.services.can_use_business and self.services.is_ready:
+                self.show_page("home")
+            else:
+                self.show_page("settings")
+
+    def _on_license_changed(self, info: LicenseInfo | None = None) -> None:
+        self._license_info = info or self.services.license.check()
+        self._refresh_license_label()
+        self._sync_nav_state()
+        if hasattr(self.pages.get("settings"), "refresh"):
+            self.pages["settings"].refresh()
+        if self.services.can_use_business and self.services.is_ready:
+            self.show_page("home")
 
     def initialize_database(self) -> None:
         db_path = self.bootstrap.get_db_path()
@@ -163,9 +253,25 @@ class TallyApp(ctk.CTk):
                     pass
 
     def show_page(self, key: str) -> None:
-        if key != "settings" and not self.services.is_ready:
-            show_info("请先在「通用配置」中设置数据存储位置")
-            key = "settings"
+        if key != "settings":
+            if not self.services.license.allow_business:
+                info = self.services.license.check()
+                self._license_info = info
+                show_info(info.message)
+                prompt_import_license(
+                    self,
+                    self.services.license,
+                    info,
+                    on_imported=self._on_license_changed,
+                )
+                self._license_info = self.services.license.check()
+                self._refresh_license_label()
+                self._sync_nav_state()
+                if not self.services.license.allow_business:
+                    key = "settings"
+            elif not self.services.is_ready:
+                show_info("请先在「通用配置」中设置数据存储位置")
+                key = "settings"
 
         page = self.pages[key]
         page.tkraise()
@@ -178,6 +284,11 @@ class TallyApp(ctk.CTk):
                 btn.configure(fg_color="transparent")
 
     def open_rooms_for_project(self, project_id: int) -> None:
+        if not self.services.license.allow_business:
+            info = self.services.license.check()
+            show_info(info.message)
+            self.show_page("settings")
+            return
         if not self.services.is_ready:
             show_info("请先在「通用配置」中设置数据存储位置")
             self.show_page("settings")

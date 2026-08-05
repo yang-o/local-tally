@@ -7,6 +7,10 @@ from pathlib import Path
 
 def collect_datas() -> list[tuple[str, str]]:
     datas: list[tuple[str, str]] = []
+    root = Path(__file__).resolve().parent.parent
+    app_assets = root / "assets"
+    if app_assets.is_dir():
+        datas.append((str(app_assets), "assets"))
 
     try:
         import customtkinter
@@ -30,6 +34,9 @@ def collect_package_resources() -> tuple[list, list, list[str]]:
         "babel.numbers",
         "tkcalendar",
         "customtkinter",
+        "nacl",
+        "nacl.signing",
+        "nacl.exceptions",
     ]
 
     try:
@@ -37,7 +44,7 @@ def collect_package_resources() -> tuple[list, list, list[str]]:
     except Exception:
         return datas, binaries, hiddenimports
 
-    for pkg in ("customtkinter", "tkcalendar", "babel"):
+    for pkg in ("customtkinter", "tkcalendar", "babel", "nacl"):
         try:
             pkg_datas, pkg_binaries, pkg_hidden = collect_all(pkg)
             datas += pkg_datas

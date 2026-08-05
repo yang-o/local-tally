@@ -16,6 +16,9 @@ from app.config import (
     is_frozen,
 )
 
+# 历史默认名；仍为该值时迁移为新默认名
+_LEGACY_DEFAULT_APP_NAME = "物业收费登记"
+
 
 @dataclass
 class BootstrapData:
@@ -42,9 +45,11 @@ class BootstrapConfig:
             raw = json.loads(self.path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             return BootstrapData()
+        app_name = str(raw.get("app_name") or DEFAULT_APP_NAME).strip() or DEFAULT_APP_NAME
+        if app_name == _LEGACY_DEFAULT_APP_NAME:
+            app_name = DEFAULT_APP_NAME
         return BootstrapData(
-            app_name=str(raw.get("app_name") or DEFAULT_APP_NAME).strip()
-            or DEFAULT_APP_NAME,
+            app_name=app_name,
             data_storage_path=str(raw.get("data_storage_path") or "").strip(),
         )
 

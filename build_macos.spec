@@ -59,13 +59,13 @@ coll = COLLECT(
 app = BUNDLE(
     coll,
     name='Tally.app',
-    icon=None,
+    icon=str(SPECDIR / 'assets' / 'app.icns'),
     bundle_identifier='com.tally.property',
     info_plist={
         'CFBundleName': 'Tally',
-        'CFBundleDisplayName': '物业收费登记',
-        'CFBundleShortVersionString': '0.1.1',
-        'CFBundleVersion': '0.1.1',
+        'CFBundleDisplayName': '本地记账',
+        'CFBundleShortVersionString': '1.0.0',
+        'CFBundleVersion': '1.0.0',
         'NSHighResolutionCapable': True,
         'LSMinimumSystemVersion': '11.0',
         'LSArchitecturePriority': ['x86_64'],

@@ -5,6 +5,13 @@
 - Intel 芯片 Mac（原生运行）
 - Apple Silicon (M1/M2/M3…) Mac（通过 Rosetta 运行）
 
+【软件授权】
+安装包不包含授权。每次安装后必须在「通用配置 → 软件授权」手动导入 .lic。
+到期后有 7 天宽限期；宽限期结束后需更换新的授权文件。
+授权文件保存在：
+  ~/Library/Application Support/Tally/license.lic
+（卸载应用会清除该文件，重新安装后需再次导入。）
+
 【数据存储】
 打包版数据固定保存在：
   ~/Library/Application Support/Tally/data

@@ -7,6 +7,12 @@ from typing import Optional
 
 from app.bootstrap import BootstrapConfig
 from app.database import Database
+from app.license import (
+    LicenseInfo,
+    check_license_file,
+    import_license_file,
+    remove_license_file,
+)
 from app.models import (
     AppSettings,
     DEFAULT_PAYMENT_PERIOD,
@@ -658,6 +664,23 @@ class ReminderService:
         return reminders
 
 
+class LicenseService:
+    """离线授权校验与导入。"""
+
+    def check(self, today: Optional[date] = None) -> LicenseInfo:
+        return check_license_file(today=today)
+
+    def import_file(self, source: Path) -> LicenseInfo:
+        return import_license_file(Path(source))
+
+    def remove(self) -> LicenseInfo:
+        return remove_license_file()
+
+    @property
+    def allow_business(self) -> bool:
+        return self.check().allow_business
+
+
 class AppServices:
     def __init__(
         self, bootstrap: BootstrapConfig, db: Database | None = None
@@ -665,6 +688,7 @@ class AppServices:
         self.bootstrap = bootstrap
         self.db = db
         self.settings = SettingsService(bootstrap, db)
+        self.license = LicenseService()
         self.projects: ProjectService | None = None
         self.rooms: RoomService | None = None
         self.leases: LeaseService | None = None
@@ -676,6 +700,11 @@ class AppServices:
     @property
     def is_ready(self) -> bool:
         return self.db is not None and self.bootstrap.is_storage_configured()
+
+    @property
+    def can_use_business(self) -> bool:
+        """存储已就绪且授权处于有效或宽限期。"""
+        return self.is_ready and self.license.allow_business
 
     def attach_database(self, db: Database) -> None:
         self.db = db
@@ -692,3 +721,6 @@ class AppServices:
     def require_ready(self) -> None:
         if not self.is_ready:
             raise ValidationError("请先在「通用配置」中设置数据存储位置")
+        if not self.license.allow_business:
+            info = self.license.check()
+            raise ValidationError(info.message)

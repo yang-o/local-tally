@@ -8,6 +8,7 @@ import customtkinter as ctk
 
 from app.config import frozen_storage_hint, is_frozen
 from app.database import export_database, import_database
+from app.license import LicenseStatus
 from app.services import AppServices, ValidationError
 from app.ui.utils import (
     ask_directory,
@@ -29,6 +30,7 @@ class SettingsPage(ctk.CTkFrame):
         on_app_name_changed: Optional[Callable[[str], None]] = None,
         on_uninstall: Optional[Callable[[], None]] = None,
         on_database_replaced: Optional[Callable[[], None]] = None,
+        on_license_changed: Optional[Callable[..., None]] = None,
         **kwargs,
     ) -> None:
         super().__init__(master, fg_color="transparent", **kwargs)
@@ -37,6 +39,7 @@ class SettingsPage(ctk.CTkFrame):
         self.on_app_name_changed = on_app_name_changed
         self.on_uninstall = on_uninstall
         self.on_database_replaced = on_database_replaced
+        self.on_license_changed = on_license_changed
         self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(0, weight=1)
 
@@ -66,7 +69,10 @@ class SettingsPage(ctk.CTkFrame):
         ctk.CTkLabel(
             card, text="基础设置", font=ctk.CTkFont(size=16, weight="bold")
         ).grid(row=row, column=0, sticky="w", padx=20, pady=(20, 12))
-        ctk.CTkButton(card, text="保存配置", width=110, command=self.save).grid(
+        self.save_btn = ctk.CTkButton(
+            card, text="保存配置", width=110, command=self.save
+        )
+        self.save_btn.grid(
             row=row, column=1, columnspan=2, sticky="e", padx=20, pady=(20, 12)
         )
 
@@ -175,9 +181,62 @@ class SettingsPage(ctk.CTkFrame):
             anchor="w",
         ).grid(row=2, column=0, columnspan=3, sticky="w", padx=20, pady=(0, 16))
 
+        # 授权独立区域
+        license_card = ctk.CTkFrame(self.scroll)
+        license_card.grid(row=3, column=0, sticky="ew", pady=(16, 0))
+        license_card.grid_columnconfigure(0, weight=1)
+        ctk.CTkLabel(
+            license_card, text="软件授权", font=ctk.CTkFont(size=16, weight="bold")
+        ).grid(row=0, column=0, columnspan=2, sticky="w", padx=20, pady=(16, 8))
+        self.license_status_label = ctk.CTkLabel(
+            license_card,
+            text="",
+            font=ctk.CTkFont(size=13),
+            text_color="#111827",
+            anchor="w",
+            justify="left",
+        )
+        self.license_status_label.grid(
+            row=1, column=0, columnspan=2, sticky="w", padx=20, pady=(0, 4)
+        )
+        self.license_detail_label = ctk.CTkLabel(
+            license_card,
+            text="",
+            font=ctk.CTkFont(size=12),
+            text_color="#6b7280",
+            anchor="w",
+            justify="left",
+            wraplength=640,
+        )
+        self.license_detail_label.grid(
+            row=2, column=0, sticky="w", padx=20, pady=(0, 12)
+        )
+        license_actions = ctk.CTkFrame(license_card, fg_color="transparent")
+        license_actions.grid(row=2, column=1, sticky="e", padx=20, pady=(0, 12))
+        self.remove_license_btn = ctk.CTkButton(
+            license_actions,
+            text="移除授权",
+            width=100,
+            fg_color="#6b7280",
+            hover_color="#4b5563",
+            command=self.remove_license,
+        )
+        self.remove_license_btn.pack(side="right")
+        self.import_license_btn = ctk.CTkButton(
+            license_actions, text="导入授权", width=100, command=self.import_license
+        )
+        self.import_license_btn.pack(side="right", padx=(0, 8))
+        ctk.CTkLabel(
+            license_card,
+            text="安装后须手动导入 .lic；到期后有 7 天宽限期，宽限期结束后需更换新授权",
+            font=ctk.CTkFont(size=12),
+            text_color="#6b7280",
+            anchor="w",
+        ).grid(row=3, column=0, columnspan=2, sticky="w", padx=20, pady=(0, 16))
+
         # 卸载区独立于配置内容卡片
         self.uninstall_card = ctk.CTkFrame(self.scroll)
-        self.uninstall_card.grid(row=3, column=0, sticky="ew", pady=(16, 12))
+        self.uninstall_card.grid(row=4, column=0, sticky="ew", pady=(16, 12))
         self.uninstall_card.grid_columnconfigure(0, weight=1)
         ctk.CTkLabel(
             self.uninstall_card,
@@ -203,6 +262,9 @@ class SettingsPage(ctk.CTkFrame):
         self.uninstall_btn.grid(row=1, column=1, sticky="e", padx=20, pady=(0, 16))
 
     def browse_storage(self) -> None:
+        if not self.services.license.allow_business:
+            show_info("请先导入授权后再配置")
+            return
         if is_frozen() or self.services.bootstrap.is_portable():
             show_info(frozen_storage_hint())
             return
@@ -225,6 +287,9 @@ class SettingsPage(ctk.CTkFrame):
             self.on_uninstall()
 
     def export_database(self) -> None:
+        if not self.services.license.allow_business:
+            show_info("请先导入授权后再操作")
+            return
         db_path = self.services.bootstrap.get_db_path()
         if db_path is None:
             show_info("请先配置数据存储位置")
@@ -251,6 +316,9 @@ class SettingsPage(ctk.CTkFrame):
             show_error(f"导出失败：{exc}")
 
     def import_database(self) -> None:
+        if not self.services.license.allow_business:
+            show_info("请先导入授权后再操作")
+            return
         db_path = self.services.bootstrap.get_db_path()
         if db_path is None:
             show_info("请先配置数据存储位置")
@@ -276,6 +344,87 @@ class SettingsPage(ctk.CTkFrame):
             show_error(str(exc))
         except OSError as exc:
             show_error(f"导入失败：{exc}")
+
+    def import_license(self) -> None:
+        source = ask_open_filename(
+            title="导入授权文件",
+            parent=self,
+            filetypes=[("授权文件", "*.lic"), ("所有文件", "*.*")],
+        )
+        if not source:
+            return
+        try:
+            info = self.services.license.import_file(Path(source))
+            show_info("授权已导入")
+            self.refresh()
+            if self.on_license_changed:
+                self.on_license_changed(info)
+        except ValueError as exc:
+            show_error(str(exc))
+        except OSError as exc:
+            show_error(f"导入失败：{exc}")
+
+    def remove_license(self) -> None:
+        if not self.services.license.allow_business:
+            show_info("当前未授权，无法移除")
+            return
+        if self.services.license.check().status == LicenseStatus.MISSING:
+            show_info("当前尚未导入授权")
+            return
+        if not ask_yes_no("确认移除本地授权？移除后需重新导入才能使用业务功能。"):
+            return
+        try:
+            info = self.services.license.remove()
+            show_info("授权已移除")
+            self.refresh()
+            if self.on_license_changed:
+                self.on_license_changed(info)
+        except ValueError as exc:
+            show_error(str(exc))
+        except OSError as exc:
+            show_error(f"移除失败：{exc}")
+
+    def _refresh_license_ui(self) -> None:
+        info = self.services.license.check()
+        lines = [f"状态：{info.status_label}"]
+        if info.customer:
+            lines.append(f"客户：{info.customer}")
+        if info.expires_at is not None:
+            lines.append(f"到期日：{info.expires_at.isoformat()}")
+        if info.grace_end is not None and info.status in {
+            LicenseStatus.VALID,
+            LicenseStatus.GRACE,
+            LicenseStatus.EXPIRED,
+        }:
+            lines.append(f"宽限截止：{info.grace_end.isoformat()}")
+        if info.status == LicenseStatus.VALID and info.days_remaining is not None:
+            lines.append(f"剩余：{info.days_remaining} 天")
+        self.license_status_label.configure(text="　".join(lines))
+        self.license_detail_label.configure(text=info.message)
+
+    def _apply_license_gate(self, licensed: bool) -> None:
+        """未授权时仅允许「导入授权」「卸载」。"""
+        if licensed:
+            self.save_btn.configure(state="normal")
+            self.app_name_entry.configure(state="normal")
+            self.import_license_btn.configure(state="normal")
+            self.uninstall_btn.configure(state="normal")
+            info = self.services.license.check()
+            self.remove_license_btn.configure(
+                state="disabled" if info.status == LicenseStatus.MISSING else "normal"
+            )
+            return
+
+        self.save_btn.configure(state="disabled")
+        self.app_name_entry.configure(state="disabled")
+        self._set_storage_entry_readonly(True)
+        self.browse_btn.configure(state="disabled")
+        self._set_remind_enabled(False)
+        self._set_db_actions_enabled(False)
+        self.remove_license_btn.configure(state="disabled")
+        self.import_license_btn.configure(state="normal")
+        self.uninstall_btn.configure(state="normal")
+        self.subtitle.configure(text="请先导入授权文件，授权后才能修改配置")
 
     def _set_remind_enabled(self, enabled: bool) -> None:
         state = "normal" if enabled else "disabled"
@@ -340,8 +489,10 @@ class SettingsPage(ctk.CTkFrame):
 
     def refresh(self) -> None:
         settings = self.services.settings.get()
+        licensed = self.services.license.allow_business
+        # 先切到可写再写入路径/名称，避免 disabled 状态下显示不更新
+        self.app_name_entry.configure(state="normal")
         self.app_name_var.set(settings.app_name)
-        # 先切到可写再写入路径，避免 disabled 状态下显示不更新
         self.storage_entry.configure(state="normal")
         self.storage_var.set(settings.data_storage_path)
         self.expire_var.set(str(settings.lease_expire_remind_days))
@@ -351,8 +502,13 @@ class SettingsPage(ctk.CTkFrame):
         self._set_remind_enabled(ready)
         # 存储已配置即可导入；导出还需已有库文件（按钮仍可用，点击时再提示）
         self._set_db_actions_enabled(settings.storage_locked or ready)
+        self._refresh_license_ui()
+        self._apply_license_gate(licensed)
 
     def save(self) -> None:
+        if not self.services.license.allow_business:
+            show_info("请先导入授权后再保存配置")
+            return
         try:
             app_name = self.app_name_var.get().strip()
             storage_path = self.storage_var.get().strip()

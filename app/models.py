@@ -30,7 +30,7 @@ class Project:
 
 @dataclass
 class AppSettings:
-    app_name: str = "物业收费登记"
+    app_name: str = "本地记账"
     data_storage_path: str = ""
     storage_locked: bool = False
     lease_expire_remind_days: int = 7
