@@ -4,7 +4,7 @@
 import sys
 from pathlib import Path
 
-SPECDIR = Path(SPECPATH).resolve().parent
+SPECDIR = Path(SPECPATH).resolve()
 sys.path.insert(0, str(SPECDIR))
 
 from bundle_support.collect_datas import collect_package_resources
