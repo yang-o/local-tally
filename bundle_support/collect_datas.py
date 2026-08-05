@@ -37,19 +37,29 @@ def collect_package_resources() -> tuple[list, list, list[str]]:
         "nacl",
         "nacl.signing",
         "nacl.exceptions",
+        "nacl.bindings",
+        # PyNaCl → cffi；Windows 打包缺此模块会 ModuleNotFoundError
+        "cffi",
+        "_cffi_backend",
     ]
 
     try:
-        from PyInstaller.utils.hooks import collect_all
+        from PyInstaller.utils.hooks import collect_all, collect_dynamic_libs
     except Exception:
         return datas, binaries, hiddenimports
 
-    for pkg in ("customtkinter", "tkcalendar", "babel", "nacl"):
+    for pkg in ("customtkinter", "tkcalendar", "babel", "nacl", "cffi"):
         try:
             pkg_datas, pkg_binaries, pkg_hidden = collect_all(pkg)
             datas += pkg_datas
             binaries += pkg_binaries
             hiddenimports += pkg_hidden
+        except Exception:
+            continue
+
+    for pkg in ("nacl", "cffi"):
+        try:
+            binaries += collect_dynamic_libs(pkg)
         except Exception:
             continue
 
