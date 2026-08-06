@@ -11,6 +11,82 @@ from tkcalendar import Calendar
 from app.ui.utils import center_window
 
 
+class TimePickerField(ctk.CTkFrame):
+    """时间选择器：时、分下拉，值为 HH:MM。"""
+
+    def __init__(
+        self,
+        master: tk.Misc,
+        textvariable: Optional[tk.StringVar] = None,
+        **kwargs,
+    ) -> None:
+        super().__init__(master, fg_color="transparent", **kwargs)
+        self.var = textvariable or ctk.StringVar(value="09:00")
+        self._hours = [f"{h:02d}" for h in range(24)]
+        self._minutes = [f"{m:02d}" for m in range(60)]
+        self.hour_var = ctk.StringVar(value="09")
+        self.minute_var = ctk.StringVar(value="00")
+
+        self.hour_menu = ctk.CTkOptionMenu(
+            self,
+            variable=self.hour_var,
+            values=self._hours,
+            width=72,
+            command=self._on_changed,
+        )
+        self.hour_menu.pack(side="left")
+        ctk.CTkLabel(self, text=":", width=16).pack(side="left", padx=2)
+        self.minute_menu = ctk.CTkOptionMenu(
+            self,
+            variable=self.minute_var,
+            values=self._minutes,
+            width=72,
+            command=self._on_changed,
+        )
+        self.minute_menu.pack(side="left")
+        self._apply_from_var(self.var.get())
+        self.var.trace_add("write", self._on_var_write)
+
+    def get(self) -> str:
+        return f"{self.hour_var.get()}:{self.minute_var.get()}"
+
+    def set(self, value: str | None) -> None:
+        self._apply_from_var(value or "09:00")
+        self.var.set(self.get())
+
+    def configure(self, **kwargs):  # type: ignore[override]
+        state = kwargs.pop("state", None)
+        if state is not None:
+            self.hour_menu.configure(state=state)
+            self.minute_menu.configure(state=state)
+        if kwargs:
+            super().configure(**kwargs)
+
+    def _on_changed(self, _value: str | None = None) -> None:
+        self.var.set(self.get())
+
+    def _on_var_write(self, *_args) -> None:
+        current = self.get()
+        incoming = (self.var.get() or "").strip()
+        if incoming == current:
+            return
+        self._apply_from_var(incoming)
+
+    def _apply_from_var(self, raw: str) -> None:
+        text = (raw or "").strip() or "09:00"
+        parts = text.split(":")
+        hour, minute = "09", "00"
+        if len(parts) >= 2:
+            try:
+                h = max(0, min(23, int(parts[0])))
+                m = max(0, min(59, int(parts[1])))
+                hour, minute = f"{h:02d}", f"{m:02d}"
+            except ValueError:
+                pass
+        self.hour_var.set(hour)
+        self.minute_var.set(minute)
+
+
 class DatePickerField(ctk.CTkFrame):
     """日期输入框：可手动输入，也可弹出日历选择。"""
 

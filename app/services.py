@@ -1,12 +1,20 @@
 from __future__ import annotations
 
 from calendar import monthrange
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
 from app.bootstrap import BootstrapConfig
 from app.database import Database
+from app.dingtalk import (
+    format_last_push_at,
+    format_reminders_markdown,
+    parse_push_time,
+    send_markdown,
+    should_clear_last_push_on_save,
+    should_push_today,
+)
 from app.license import (
     LicenseInfo,
     check_license_file,
@@ -115,6 +123,11 @@ class SettingsService:
             storage_locked=self.bootstrap.is_storage_configured(),
             lease_expire_remind_days=remind.lease_expire_remind_days,
             rent_due_remind_days=remind.rent_due_remind_days,
+            dingtalk_enabled=remind.dingtalk_enabled,
+            dingtalk_webhook=remind.dingtalk_webhook,
+            dingtalk_secret=remind.dingtalk_secret,
+            dingtalk_push_time=remind.dingtalk_push_time,
+            dingtalk_last_push_date=remind.dingtalk_last_push_date,
         )
 
     def update(
@@ -123,6 +136,10 @@ class SettingsService:
         data_storage_path: str | None,
         lease_expire_remind_days: int | None = None,
         rent_due_remind_days: int | None = None,
+        dingtalk_enabled: bool | None = None,
+        dingtalk_webhook: str | None = None,
+        dingtalk_secret: str | None = None,
+        dingtalk_push_time: str | None = None,
     ) -> bool:
         """更新配置。返回是否新配置了数据存储位置。"""
         try:
@@ -158,13 +175,83 @@ class SettingsService:
             raise ValidationError("合同到期提前提醒天数不能为负数")
         if rent_due_remind_days < 0:
             raise ValidationError("按月应收提前提醒天数不能为负数")
+
+        current = self.repo.get_settings()
+        enabled = (
+            current.dingtalk_enabled
+            if dingtalk_enabled is None
+            else bool(dingtalk_enabled)
+        )
+        webhook = (
+            current.dingtalk_webhook
+            if dingtalk_webhook is None
+            else dingtalk_webhook.strip()
+        )
+        secret = (
+            current.dingtalk_secret
+            if dingtalk_secret is None
+            else dingtalk_secret.strip()
+        )
+        push_time = (
+            current.dingtalk_push_time
+            if dingtalk_push_time is None
+            else dingtalk_push_time.strip()
+        ) or "09:00"
+        try:
+            parse_push_time(push_time)
+        except ValueError as exc:
+            raise ValidationError(str(exc)) from exc
+        if enabled and not webhook:
+            raise ValidationError("启用钉钉推送时请填写 Webhook 地址")
+        if enabled and not secret:
+            raise ValidationError("启用钉钉推送时请填写加签密钥")
+        if webhook and not webhook.startswith(("http://", "https://")):
+            raise ValidationError("Webhook 地址应以 http:// 或 https:// 开头")
+
+        from datetime import datetime
+
+        last_push = current.dingtalk_last_push_date
+        now = datetime.now()
+        # 推送时刻仍在今日未来：清除今日已推标记，到点后再次触发
+        if should_clear_last_push_on_save(
+            enabled=enabled,
+            push_time=push_time,
+            now_hour=now.hour,
+            now_minute=now.minute,
+        ):
+            last_push = ""
+
         self.repo.save_settings(
             AppSettings(
                 lease_expire_remind_days=lease_expire_remind_days,
                 rent_due_remind_days=rent_due_remind_days,
+                dingtalk_enabled=enabled,
+                dingtalk_webhook=webhook,
+                dingtalk_secret=secret,
+                dingtalk_push_time=push_time,
+                dingtalk_last_push_date=last_push,
             )
         )
+        # 清除上次失败信息（配置已更新，等待下次调度）
+        if self.repo is not None:
+            self.repo.set_value("dingtalk_last_error", "")
         return storage_just_set
+
+    def mark_dingtalk_pushed(self, when: Optional[datetime] = None) -> None:
+        if self.repo is None:
+            return
+        self.repo.set_value("dingtalk_last_push_date", format_last_push_at(when))
+        self.repo.set_value("dingtalk_last_error", "")
+
+    def mark_dingtalk_error(self, message: str) -> None:
+        if self.repo is None:
+            return
+        self.repo.set_value("dingtalk_last_error", (message or "").strip()[:500])
+
+    def dingtalk_last_error(self) -> str:
+        if self.repo is None:
+            return ""
+        return self.repo.get_value("dingtalk_last_error", "")
 
 
 class ProjectService:
@@ -681,6 +768,82 @@ class LicenseService:
         return self.check().allow_business
 
 
+class DingTalkPushService:
+    """提醒看板 → 钉钉机器人推送。"""
+
+    def __init__(self, services: "AppServices") -> None:
+        self.services = services
+
+    def push_reminders(self, *, force: bool = False) -> str:
+        """推送当前提醒看板。返回结果说明文案。
+
+        force=True 时忽略「每天一次」与推送时刻限制（用于手动测试）。
+        """
+        if not self.services.can_use_business:
+            raise ValidationError("请先完成授权并配置数据存储后再推送")
+        if self.services.reminders is None:
+            raise ValidationError("提醒服务未就绪")
+        settings = self.services.settings.get()
+        if not force and not settings.dingtalk_enabled:
+            raise ValidationError("请先在通用配置中启用钉钉推送")
+        webhook = settings.dingtalk_webhook.strip()
+        if not webhook:
+            raise ValidationError("请先填写钉钉 Webhook 地址")
+        secret = settings.dingtalk_secret.strip()
+        if not secret:
+            raise ValidationError("请先填写加签密钥")
+
+        items = self.services.reminders.list_reminders()
+        title, text = format_reminders_markdown(
+            items,
+            app_name=settings.app_name or "本地记账",
+        )
+        try:
+            send_markdown(
+                webhook,
+                title,
+                text,
+                secret=secret,
+            )
+        except ValueError as exc:
+            self.services.settings.mark_dingtalk_error(str(exc))
+            raise
+        self.services.settings.mark_dingtalk_pushed()
+        return f"已推送 {len(items)} 条提醒到钉钉"
+
+    def maybe_auto_push(self) -> Optional[str]:
+        """到达设定时刻且今日未成功推送时自动推送；不满足条件返回 None。
+
+        到点推送失败时不记成功时间，恢复后可补推一次。
+        """
+        if not self.services.can_use_business or self.services.reminders is None:
+            return None
+        settings = self.services.settings.get()
+        now = datetime.now()
+        try:
+            due = should_push_today(
+                enabled=settings.dingtalk_enabled,
+                push_time=settings.dingtalk_push_time,
+                last_push_date=settings.dingtalk_last_push_date,
+                now_date=now.date(),
+                now_hour=now.hour,
+                now_minute=now.minute,
+            )
+        except ValueError as exc:
+            self.services.settings.mark_dingtalk_error(str(exc))
+            return None
+        if not due:
+            return None
+        try:
+            return self.push_reminders(force=False)
+        except ValidationError as exc:
+            self.services.settings.mark_dingtalk_error(str(exc))
+            return None
+        except ValueError:
+            # 已在 push_reminders 写入 last_error；不标记成功，稍后重试
+            return None
+
+
 class AppServices:
     def __init__(
         self, bootstrap: BootstrapConfig, db: Database | None = None
@@ -689,6 +852,7 @@ class AppServices:
         self.db = db
         self.settings = SettingsService(bootstrap, db)
         self.license = LicenseService()
+        self.dingtalk = DingTalkPushService(self)
         self.projects: ProjectService | None = None
         self.rooms: RoomService | None = None
         self.leases: LeaseService | None = None

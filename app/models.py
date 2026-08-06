@@ -35,6 +35,11 @@ class AppSettings:
     storage_locked: bool = False
     lease_expire_remind_days: int = 7
     rent_due_remind_days: int = 7
+    dingtalk_enabled: bool = False
+    dingtalk_webhook: str = ""
+    dingtalk_secret: str = ""
+    dingtalk_push_time: str = "09:00"
+    dingtalk_last_push_date: str = ""
 
 
 @dataclass

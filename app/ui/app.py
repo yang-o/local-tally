@@ -54,6 +54,22 @@ class TallyApp(ctk.CTk):
             self.show_page("settings")
 
         self.after(120, self._handle_license_on_startup)
+        self.after(3_000, self._dingtalk_scheduler_tick)
+
+    def _dingtalk_scheduler_tick(self) -> None:
+        """定期检查是否到达钉钉推送时刻（今日未成功则到点触发/补推）。"""
+        try:
+            if self.services.can_use_business:
+                self.services.dingtalk.maybe_auto_push()
+            settings_page = self.pages.get("settings")
+            if settings_page is not None and hasattr(
+                settings_page, "refresh_dingtalk_status"
+            ):
+                settings_page.refresh_dingtalk_status()
+        except Exception:
+            pass
+        # 15 秒一轮，避免整点错过后要等整分钟
+        self.after(15_000, self._dingtalk_scheduler_tick)
 
     def _apply_window_icon(self) -> None:
         """设置窗口/任务栏图标（打包后使用捆绑资源）。"""

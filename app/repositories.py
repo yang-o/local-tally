@@ -49,9 +49,17 @@ class SettingsRepository:
             rent_due_remind_days = int(values.get("rent_due_remind_days", rent_default))
         except ValueError:
             rent_due_remind_days = 7
+        enabled_raw = (values.get("dingtalk_enabled") or "0").strip().lower()
+        dingtalk_enabled = enabled_raw in {"1", "true", "yes", "on"}
+        push_time = (values.get("dingtalk_push_time") or "09:00").strip() or "09:00"
         return AppSettings(
             lease_expire_remind_days=lease_expire_remind_days,
             rent_due_remind_days=rent_due_remind_days,
+            dingtalk_enabled=dingtalk_enabled,
+            dingtalk_webhook=(values.get("dingtalk_webhook") or "").strip(),
+            dingtalk_secret=(values.get("dingtalk_secret") or "").strip(),
+            dingtalk_push_time=push_time,
+            dingtalk_last_push_date=(values.get("dingtalk_last_push_date") or "").strip(),
         )
 
     def save_settings(self, settings: AppSettings) -> None:
@@ -59,6 +67,14 @@ class SettingsRepository:
             "lease_expire_remind_days", str(settings.lease_expire_remind_days)
         )
         self.set_value("rent_due_remind_days", str(settings.rent_due_remind_days))
+        self.set_value("dingtalk_enabled", "1" if settings.dingtalk_enabled else "0")
+        self.set_value("dingtalk_webhook", settings.dingtalk_webhook or "")
+        self.set_value("dingtalk_secret", settings.dingtalk_secret or "")
+        self.set_value("dingtalk_push_time", settings.dingtalk_push_time or "09:00")
+        # 必须允许写入空字符串，否则「清除今日已推」无法生效
+        self.set_value(
+            "dingtalk_last_push_date", settings.dingtalk_last_push_date or ""
+        )
 
 
 class ProjectRepository:
